@@ -7,8 +7,8 @@
 // @match        https://hoathinh3d.co/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=tampermonkey.net
 // @connect      raw.githubusercontent.com
-// @updateURL    https://raw.githubusercontent.com/Melios025/hh3d/main/script.js
-// @downloadURL  https://raw.githubusercontent.com/Melios025/hh3d/main/script.js
+// @updateURL    https://raw.githubusercontent.com/Melios025/hh3d/refs/heads/main/script.js
+// @downloadURL  https://raw.githubusercontent.com/Melios025/hh3d/refs/heads/main/script.js
 // @grant        none
 // ==/UserScript==
     
