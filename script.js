@@ -521,7 +521,7 @@
 
         for (var j = 0; j < rooms_not_blessed.length; j++) {
             await new Promise(function (r) { setTimeout(r, 500 + Math.random() * 500); });
-            var room = rooms_not_blessed[j];
+            room = rooms_not_blessed[j];
             var randomBless = blessMessages[Math.floor(Math.random() * blessMessages.length)];
 
             try {
@@ -529,7 +529,7 @@
                     ? 'https://hoathinh3d.co/wp-json/hh3d/v1/hong-nhan/bless'
                     : 'hh3d_add_blessing';
 
-                var res = await resApi(endpoint, {
+                res = await resApi(endpoint, {
                     message: randomBless,
                     wedding_room_id: room.wedding_room_id
                 });
