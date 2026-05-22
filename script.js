@@ -17,12 +17,13 @@
 
     //Helper function to format text
     function normalizeText(str) {
-        return str
-            .normalize('NFC')        // chuẩn hóa unicode tiếng Việt
-            .replace(/\s+/g, ' ')    // nhiều khoảng trắng → 1
-            .trim()                  // bỏ khoảng trắng đầu/cuối
-            .toLowerCase();          // về chữ thường
-    }
+    return str
+        .normalize('NFC')
+        .replace(/[《》「」『』""''?？!！]/g, '')  // bỏ dấu câu đặc biệt
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
     //Tạo dữ liệu đầu ngày
     function getDailyTasks() {
         var today = new Date().toLocaleDateString('en-GB'); // e.g. 19/05/2026
@@ -1288,6 +1289,7 @@
             document.head.appendChild(style);
         }
     }
+
     //Hiển thị thời gian
     function updateTimerDisplay() {
         var timerDisplay = document.getElementById('timer-display');
@@ -1327,7 +1329,6 @@
         timerDisplay.innerHTML = html || '<div class="timer-row">Không có task nào đang chờ</div>';
     }
 
-
     //Chạy task với xử lý lỗi chung
     var runningTask = null;
     function runTask(fn, key) {
@@ -1348,7 +1349,6 @@
                 }, 3000); // giảm xuống vì không cần chờ lâu nữa
             });
     }
-
 
     // Cập nhật trạng thái nút auto toggle
     function updateAutoToggleButton() {
