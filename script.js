@@ -1426,7 +1426,7 @@
 
     function startAutoExecute() {
         if (autoExecuteInterval) return;
-        autoExecuteInterval = setInterval(autoExecute, 10000);
+        autoExecuteInterval = setInterval(autoExecute, 5000);
         autoExecute();
     }
 
