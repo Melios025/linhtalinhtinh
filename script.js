@@ -519,9 +519,9 @@
             '🌿 Trải qua ngàn kiếp luân hồi, cuối cùng tương ngộ! Nguyện hai vị đạo hữu tâm ý tương thông, đồng tu đồng tiến, chứng đắc đại đạo! ⚔️'
         ];
 
-        for (var i = 0; i < rooms_not_blessed.length; i++) {
+        for (var j = 0; j < rooms_not_blessed.length; j++) {
             await new Promise(function (r) { setTimeout(r, 500 + Math.random() * 500); });
-            var room = rooms_not_blessed[i];
+            var room = rooms_not_blessed[j];
             var randomBless = blessMessages[Math.floor(Math.random() * blessMessages.length)];
 
             try {
