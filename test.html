@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Control Panel Preview</title>
+    <style>
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        /* ===== PANEL CONTAINER ===== */
+        #auto-control-panel {
+            position: relative;
+            width: 400px;
+            padding: 14px;
+            background: rgba(20, 20, 20, 0.95);
+            color: #fff;
+            border-radius: 14px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        /* ===== HEADER ===== */
+        #auto-control-panel .panel-header {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #60a5fa;
+            margin-bottom: 12px;
+        }
+
+        /* ===== BODY ===== */
+        #auto-control-panel .panel-body {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        /* ===== ROWS ===== */
+        #auto-control-panel .panel-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* ===== BUTTONS ===== */
+        #auto-control-panel .panel-btn {
+            width: 100%;
+            margin: 0;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%);
+            color: #ffffff;
+            box-shadow: 0 8px 18px rgba(59, 130, 246, 0.25);
+            cursor: pointer;
+            transition: transform 180ms ease, opacity 200ms ease, background 200ms ease;
+            font-size: 16px;
+            justify-content: center;
+            text-align: center;
+        }
+
+        #auto-control-panel a.panel-btn {
+            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+        }
+
+        #auto-control-panel a.panel-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
+        }
+
+        #auto-control-panel .panel-btn-full {
+            width: 100%;
+            display: block;
+            margin: 0;
+        }
+
+        #auto-control-panel .panel-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #f07373 0%, #f35050 100%);
+        }
+
+        #auto-control-panel .panel-btn:disabled {
+            background: linear-gradient(135deg, #3d3d3d 0%, #8f8f8f 100%);
+            color: #979696;
+            cursor: not-allowed;
+            opacity: 0.9;
+        }
+
+        #auto-control-panel .panel-btn.done {
+            background: #16a34a;
+        }
+
+        
+        /* ===== SELECT ===== */
+        #auto-control-panel .panel-select {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background: #374151;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+
+        /* ===== LINKS ===== */
+        a {
+            text-decoration: none;
+        }
+
+        /* ===== TIMER ===== */
+        #auto-control-panel #timer-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 12px;
+            margin-top: 4px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        #auto-control-panel .timer-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+        }
+
+        #auto-control-panel .timer-row span:first-child {
+            color: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="auto-control-panel">
+        <div class="panel-header">Auto Menu</div>
+        <div class="panel-body">
+
+            <!-- Hàng 1: 1 lần/ngày -->
+            <div class="panel-row">
+                <button id="btn-diemdanh-vandap-tele" class="panel-btn panel-btn-full">Điểm Danh - Tế lễ - Vấn đáp ✅</button>
+
+            </div>
+
+            <!-- Hàng 2 -->
+            <div class="panel-row">
+                <button id="btn-hoangvuc" class="panel-btn">Hoàng Vực</button>
+                <button id="btn-thiluyen" class="panel-btn">Thí Luyện</button>
+            </div>
+
+            <!-- Hàng 3 -->
+            <div class="panel-row">
+                <button id="btn-phucloi" class="panel-btn">Phúc Lợi</button>
+                <button id="btn-bicanh" class="panel-btn">Bí Cảnh</button>
+            </div>
+
+            <!-- Khoáng Mạch full width -->
+            <button id="btn-khoangmach" class="panel-btn panel-btn-full">Khoáng Mạch</button>
+
+            <!-- Tiên Duyên full width -->
+            <button id="btn-tienduyen" class="panel-btn panel-btn-full">Tiên Duyên</button>
+
+            <!-- Đồ Thạch -->
+            <button id="btn-dothach" class="panel-btn panel-btn-full">Đồ Thạch</button>
+
+            <!-- Link -->
+            <a id="btn-banghoatdong" class="panel-btn panel-btn-full" href="https://hoathinh3d.co/nhiem-vu-hang-ngay" target="_blank">Bảng
+                hoạt động ngày</a>
+
+            <!-- Timer -->
+            <div id="timer-display">
+                <div class="timer-row">
+                    <span>Hoàng Vực</span>
+                    <span style="color:#4ade80;">Ready</span>
+                </div>
+                <div class="timer-row">
+                    <span>Phúc Lợi</span>
+                    <span>12p 30s</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+
+</html>
