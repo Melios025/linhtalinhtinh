@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Tool clone
+// @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  Mine use only
 // @author       Melios
 // @match        https://hoathinh3d.co/*
