@@ -2,7 +2,7 @@
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
 // @version      2.4.5
-// @description  Mine use only
+// @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=tampermonkey.net
