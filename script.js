@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.5.1
+// @version      2.5.2
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -699,8 +699,8 @@
             return;
         }
 
-        await ajax(hh3dData.act.hdnReward, { stage: 'stage1' });
-        await ajax(hh3dData.act.hdnReward, { stage: 'stage2' });
+        await ajax(hh3dData.act.hdnReward, { stage: 'stage1' }, { ignoreSuccess: true });
+        await ajax(hh3dData.act.hdnReward, { stage: 'stage2' }, { ignoreSuccess: true });
         showTempAlert('Đã nhận thưởng hoạt động ngày', 'success');
 
         for (var i = 0; i < 4; i++) {
