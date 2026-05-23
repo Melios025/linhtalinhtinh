@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.4.6
+// @version      2.4.7
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -594,7 +594,7 @@
 
         // Xác định lượt theo giờ
         const isTurn1Time = hour >= 6 && hour < 13;
-        const isTurn2Time = hour >= 18 && hour < 21;
+        const isTurn2Time = hour >= 16 && hour < 21;
 
         if (!isTurn1Time && !isTurn2Time) {
             throw new Error('Không phải thời gian đặt cược (6h-13h hoặc 18h-21h)');
