@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.4.8
+// @version      2.5.0
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -11,19 +11,19 @@
 // @downloadURL  https://raw.githubusercontent.com/Melios025/hh3d/refs/heads/main/script.js
 // @grant        none
 // ==/UserScript==
-    
+
 (function () {
     'use strict';
 
     //Helper function to format text
     function normalizeText(str) {
-    return str
-        .normalize('NFC')
-        .replace(/[《》「」『』""''?？!！]/g, '')  // bỏ dấu câu đặc biệt
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase();
-}
+        return str
+            .normalize('NFC')
+            .replace(/[《》「」『』""''?？!！]/g, '')  // bỏ dấu câu đặc biệt
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
     //Tạo dữ liệu đầu ngày
     function getDailyTasks() {
         var today = new Date().toLocaleDateString('en-GB'); // e.g. 19/05/2026
@@ -704,10 +704,28 @@
         showTempAlert('Đã nhận thưởng hoạt động ngày', 'success');
         saveTaskData('hdnReward', { done: true });
         for (var i = 0; i < 4; i++) {
-            var res = await resApi('lottery/v1/7cdf093b');
-            showTempAlert(`Lần quay ${i + 1}: ${res.prize.name}`, 'success');
-            if (i < 3) await new Promise(resolve => setTimeout(resolve, 2000));
+            var res = await fetch('https://hoathinh3d.co/wp-json/lottery/v1/7cdf093b', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': hh3dData.restNonce
+                },
+                body: JSON.stringify({
+                    security_token: hh3dData.securityToken
+                })
+            }).then(r => r.json());
+
+            if (res.success) {
+                showTempAlert('Lần quay ' + (i + 1) + ': ' + res.data.prize.name, 'success');
+            } else {
+                showTempAlert('Lần quay ' + (i + 1) + ': ' + (res.data?.message || res.message), 'error');
+                break;
+            }
+
+            if (i < 3) await new Promise(function (r) { setTimeout(r, 2000); });
         }
+
+
     }
     //Update button
     function updateButtonStates() {
