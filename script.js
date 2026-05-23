@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.5.4
+// @version      2.5.5
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -705,7 +705,7 @@
         await ajax(hh3dData.act.hdnReward, { stage: 'stage2' }).catch(e => {
             showTempAlert(e.message || 'Lỗi stage2', 'error');
         });
-        showTempAlert('Đã nhận thưởng hoạt động ngày', 'success');
+        
 
         for (var i = 0; i < 4; i++) {
             var res = await fetch('https://hoathinh3d.co/wp-json/lottery/v1/7cdf093b', {
@@ -721,7 +721,10 @@
 
             if (res.success) {
                 showTempAlert('Lần quay ' + (i + 1) + ': ' + res.prize.name, 'success');
-                if (i >= 3) saveTaskData('hdnReward', { done: true });
+                if (i >= 3) {
+                    saveTaskData('hdnReward', { done: true });
+                    showTempAlert('Đã nhận thưởng hoạt động ngày', 'success');
+                }
             } else {
                 throw new Error('Quay thưởng thất bại: ' + (res.data?.message || res.message));
             }
