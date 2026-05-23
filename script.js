@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.4.7
+// @version      2.4.8
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -1114,7 +1114,7 @@
                 } else {
                     showTempAlert('Đã đặt cược rồi', 'error');
                 }
-            } else if (currentHour >= 13 && currentHour < 16 || currentHour >= 21 && currentHour < 23 || currentHour >= 0 && currentHour < 6) {
+            } else if (currentHour >= 13 && currentHour < 16 || currentHour >= 21 && currentHour <= 23 || currentHour >= 0 && currentHour < 6) {
                 if (!this.disabled) runTask(nhan_thuong_do_thach);
             }
         });
