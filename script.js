@@ -897,7 +897,7 @@
         var style = document.createElement('style');
         style.textContent = `
     auto-control-panel {
-            position: relative;
+            position: fixed;;
             width: 400px;
             background: rgba(20, 20, 20, 0.95);
             color: #fff;
