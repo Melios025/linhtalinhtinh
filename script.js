@@ -1406,7 +1406,7 @@
 
         container.appendChild(toast);
 
-        var duration = 3000;
+        var duration = 5000;
         var start = Date.now();
         var timer = setInterval(function () {
             var elapsed = Date.now() - start;
