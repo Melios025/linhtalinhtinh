@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.6.2
+// @version      2.6.3
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -757,10 +757,12 @@
         var btn3 = document.getElementById('btn-diemdanh-vandap-tele');
         if (btn3) {
             var allDone = tasks.diemdanh?.done && tasks.tele?.done && tasks.vandap?.done;
-            var originalText = btn3.getAttribute('data-label') || btn3.textContent.replace(' <i class="fa-solid fa-circle-check"></i>', '').trim();
+            var originalText = btn3.getAttribute('data-label') || btn3.textContent.trim();
             btn3.setAttribute('data-label', originalText);
             btn3.disabled = allDone;
-            btn3.textContent = allDone ? originalText + ' <i class="fa-solid fa-circle-check"></i>' : originalText;
+            btn3.innerHTML = allDone
+                ? originalText + ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>'
+                : originalText;
         }
 
         // Các button thường
@@ -770,10 +772,12 @@
             if (btn) {
                 var t = tasks[key] || {};
                 var isDone = t.done === true;
-                var originalText = btn.getAttribute('data-label') || btn.querySelector('.btn-label')?.textContent.replace(' <i class="fa-solid fa-circle-check"></i>', '').trim() || btn.textContent.replace(' <i class="fa-solid fa-circle-check"></i>', '').trim();
+                var originalText = btn.getAttribute('data-label') || btn.textContent.trim();
                 btn.setAttribute('data-label', originalText);
                 btn.disabled = isDone;
-                btn.textContent = isDone ? originalText + ' <i class="fa-solid fa-circle-check"></i>' : originalText;
+                btn.innerHTML = isDone
+                    ? originalText + ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>'
+                    : originalText;
             }
         });
 
@@ -828,7 +832,7 @@
             var pct = Math.min(100, Math.round((p.done / p.max) * 100));
 
             btn.disabled = isDone;
-            btn.innerHTML = `<div class="btn-progress" style="width:${pct}%"></div><span class="btn-label">${item.label}${isDone ? ' <i class="fa-solid fa-circle-check"></i>' : ''}</span>`;
+            btn.innerHTML = `<div class="btn-progress" style="width:${pct}%"></div><span class="btn-label">${item.label}${isDone ? ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>' : ''}</span>`;
         });
     }
 
@@ -938,7 +942,7 @@
             <div class="panel-row">
                 <button id="btn-diemdanh-vandap-tele" class="panel-btn panel-btn-full">Điểm Danh - Tế lễ - Vấn
                     đáp</button>
-                <button id="btn-auto-toggle" class="panel-btn btn-auto-toggle"><i class="fa-solid fa-check"></i></button>
+                <button id="btn-auto-toggle" class="panel-btn btn-auto-toggle"></button>
                 <button id="btn-setting" class="panel-btn btn-auto-toggle"><i class="fa-solid fa-gear"></i></button>
             </div>
 
@@ -1090,6 +1094,14 @@
             align-items: center;
             justify-content: center;
             border-radius: 5px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        #auto-control-panel #btn-auto-toggle:hover:not(:disabled),
+        #auto-control-panel #btn-setting:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.16);
+            transform: none;
+            box-shadow: none;
         }
         #auto-control-panel .settings-panel {
             display: none;
@@ -1484,7 +1496,9 @@
         var btn = document.getElementById('btn-auto-toggle');
         if (!btn) return;
         var setting = getUserSetting();
-        btn.textContent = setting.autoRun !== false ? '✅' : '❌';
+        btn.innerHTML = setting.autoRun !== false
+            ? '<i class="fa-solid fa-check" style="color: rgb(55, 157, 8);"></i>'
+            : '<i class="fa-solid fa-xmark" style="color: rgb(239, 5, 5);"></i>';
     }
 
     // Tự động excute
