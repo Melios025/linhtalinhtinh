@@ -892,12 +892,15 @@
         </div>
 `;
 
-        panel.style.cssText = 'position:fixed;top:auto;right:10px;bottom:60px;display:none;width: 400px; background: rgba(20, 20, 20, 0.95); color: #fff;border-radius: 14px;box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);font-family: Arial, sans-serif;font-size: 12px;line-height: 1.4;padding: 20px;'
+        panel.style.cssText = 'display:none;';
 
         var style = document.createElement('style');
         style.textContent = `
-    auto-control-panel {
-            position: relative;
+        #auto-control-panel {
+            position: fixed;
+            top: auto;
+            right: 10px;
+            bottom: 60px;
             width: 400px;
             background: rgba(20, 20, 20, 0.95);
             color: #fff;
