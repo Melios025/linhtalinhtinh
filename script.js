@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.5.13
+// @version      2.5.14
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -1166,49 +1166,23 @@
         });
     }
 
-
     //Bật tắt bảng điều khiển
     function toggleControlPanel() {
-        createControlPanel();
-        var panel = document.getElementById('auto-control-panel');
-        if (!panel) return;
+    createControlPanel();
+    var panel = document.getElementById('auto-control-panel');
+    if (!panel) return;
 
-        var isVisible = panel.style.display === 'block';
-        if (isVisible) {
-            panel.style.display = 'none';
-        } else {
-            var taskBtn = document.getElementById('open-auto-menu');
-            if (taskBtn) {
-                var rect = taskBtn.getBoundingClientRect();
-                var panelWidth = 220;
-
-                // Căn trái theo nút, nhưng không vượt quá màn hình
-                var left = rect.left;
-                if (left + panelWidth > window.innerWidth) {
-                    left = window.innerWidth - panelWidth - 10;
-                }
-                if (left < 10) left = 10;
-
-                // Hiện lên phía trên nút toggle
-                var panelHeight = 500; // ước tính
-                var top = rect.top - panelHeight - 8;
-                if (top < 10) top = rect.bottom + 8; // nếu không đủ chỗ trên thì hiện xuống dưới
-
-                panel.style.top = top + 'px';
-                panel.style.left = left + 'px';
-                panel.style.right = 'auto';
-                panel.style.bottom = 'auto';
-                panel.style.width = panelWidth + 'px';
-            }
-            panel.style.display = 'block';
-            panel.style.display = 'block';
-            updatePanelPosition(); // ← thay cho đoạn tính vị trí cũ
-            updateButtonStates();
-        }
-
-        var button = document.getElementById('open-auto-menu');
-        if (button) button.setAttribute('aria-expanded', String(!isVisible));
+    var isVisible = panel.style.display === 'block';
+    if (isVisible) {
+        panel.style.display = 'none';
+    } else {
+        panel.style.display = 'block';
+        updateButtonStates();
     }
+
+    var button = document.getElementById('open-auto-menu');
+    if (button) button.setAttribute('aria-expanded', String(!isVisible));
+}
 
     //Tạo nút menu
     function createAutoMenuButton() {
@@ -1225,7 +1199,7 @@
         wrapper.style.cssText = 'position:relative;'; // ← làm anchor cho panel
         wrapper.innerHTML = `
         <a href="#" id="open-auto-menu" data-view="hide">
-            <div><span class="material-icons-round1 material-icons-menu">🗐</span></div>
+            <div><i class="fa-solid fa-robot"></i></div>
             <span class="nav-label">Auto</span>
         </a>
     `;
