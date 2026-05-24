@@ -548,7 +548,7 @@
                     message: randomBless,
                     wedding_room_id: room.wedding_room_id
                 });
-                showTempAlert(res.data?.message || 'Chúc phúc thành công', 'success');
+                showTempAlert(res.message || 'Chúc phúc thành công', 'success');
             } catch (e) {
                 showTempAlert(e.message || 'Chúc phúc thất bại', 'error');
                 return;
@@ -839,8 +839,6 @@
         var panel = document.createElement('div');
         panel.id = 'auto-control-panel';
         panel.innerHTML = `
-
-        <div id="auto-control-panel">
         <div class="panel-header">Auto Menu</div>
         <div class="panel-body">
 
@@ -892,14 +890,13 @@
             </div>
             <div id="settings-panel" class="settings-panel hidden"></div>
         </div>
-    </div>
 `;
 
         panel.style.cssText = 'position:fixed;top:auto;right:10px;bottom:60px;width:220px;padding:10px;background:rgba(20,20,20,0.95);color:#fff;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.3);z-index:99999;font-family:Arial,sans-serif;font-size:12px;line-height:1.4;display:none;';
 
         var style = document.createElement('style');
         style.textContent = `
-    #auto-control-panel {
+    auto-control-panel {
             position: relative;
             width: 400px;
             background: rgba(20, 20, 20, 0.95);
@@ -909,6 +906,7 @@
             font-family: Arial, sans-serif;
             font-size: 12px;
             line-height: 1.4;
+            padding: 20px;
         }
             /* ===== HEADER ===== */
         #auto-control-panel .panel-header {
@@ -920,6 +918,7 @@
             font-weight: bold;
             color: #60a5fa;
             margin-bottom: 12px;
+            margin-top: 12px;
         }
 
         /* ===== BODY ===== */
@@ -976,9 +975,6 @@
 
         #auto-control-panel a.panel-btn:hover:not(:disabled) {
         background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
-        transition: all 0.2s ease;
         }
 
         #auto-control-panel .panel-btn-full {
@@ -1044,7 +1040,10 @@
         }
 
         #auto-control-panel .panel-btn:hover:not(:disabled) {
-            background: linear-gradient(135deg, #f07373 0%, #f35050 100%);
+            background: linear-gradient(135deg, #f07373 0%, #f13e3e 100%);
+            transform: scale(1.03);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+            transition: all 0.2s ease;
         }
 
         #auto-control-panel .panel-btn:disabled {
@@ -1309,27 +1308,121 @@
     //Hiển thị thông báo
     function showTempAlert(message, type) {
         type = type || 'error';
-        var toastContainer = document.getElementById('toast-container');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.id = 'toast-container';
-            toastContainer.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:10px;z-index:999999;margin:0;padding:0;list-style:none;';
-            document.body.appendChild(toastContainer);
+
+        var container = document.querySelector('ul.notifications');
+        if (!container) {
+            container = document.createElement('ul');
+            container.className = 'notifications';
+            document.body.appendChild(container);
         }
-        var toast = document.createElement('li');
-        var mark = type === 'error' ? '✗' : '✓';
-        var markColor = type === 'error' ? '#ff6b6b' : '#0abf30';
-        var borderColor = type === 'error' ? '#ff6b6b' : '#0abf30';
-        toast.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:#26282e;border:1px solid #30323a;border-left:3px solid ' + borderColor + ';border-radius:8px;color:#f1f3f5;font-family:Montserrat,sans-serif;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.3);animation:slideIn 0.3s ease;min-width:280px;max-width:400px;';
-        toast.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><span style="color:' + markColor + ';font-weight:bold;font-size:14px;">' + mark + '</span><span>' + message + '</span></div><span style="cursor:pointer;color:#868e96;font-size:14px;" onclick="this.parentElement.remove()">×</span>';
-        toastContainer.appendChild(toast);
-        setTimeout(function () { if (toastContainer.contains(toast)) toast.remove(); }, 3000);
-        if (!document.getElementById('toast-animation')) {
+
+        if (!document.getElementById('toast-style')) {
             var style = document.createElement('style');
-            style.id = 'toast-animation';
-            style.textContent = '@keyframes slideIn{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}';
+            style.id = 'toast-style';
+            style.textContent = [
+                'ul.notifications {',
+                '  position: fixed;',
+                '  top: 30px;',
+                '  left: 50%;',
+                '  transform: translateX(-50%);',
+                '  z-index: 999999;',
+                '  margin: 0;',
+                '  padding: 0;',
+                '  list-style: none;',
+                '  display: flex;',
+                '  flex-direction: column;',
+                '  gap: 8px;',
+                '  width: auto;',
+                '}',
+                '.notifications .toast {',
+                '  display: flex;',
+                '  align-items: center;',
+                '  justify-content: space-between;',
+                '  gap: 12px;',
+                '  padding: 12px 16px;',
+                '  border-radius: 8px;',
+                '  font-family: Montserrat, sans-serif;',
+                '  font-size: 18px;',
+                '  min-width: 280px;',
+                '  max-width: 420px;',
+                '  min-height: 80px;',
+                '  background: #26282e;',
+                '  color: #f1f3f5;',
+                '  border: 1px solid #30323a;',
+                '  position: relative;',
+                '  overflow: hidden;',
+                '  animation: toastSlideIn 0.3s ease;',
+                '}',
+                '.notifications .toast::after {',
+                '  content: "";',
+                '  position: absolute;',
+                '  bottom: 0;',
+                '  left: 0;',
+                '  height: 3px;',
+                '  width: var(--progress-width, 100%);',
+                '  transition: width 0.1s linear;',
+                '}',
+                '.notifications .toast.error   { border-left: 3px solid #ff6b6b; }',
+                '.notifications .toast.error::after   { background: #ff6b6b; }',
+                '.notifications .toast.success { border-left: 3px solid #0abf30; }',
+                '.notifications .toast.success::after { background: #0abf30; }',
+                '.notifications .toast .column {',
+                '  display: flex;',
+                '  align-items: center;',
+                '  gap: 10px;',
+                '  flex: 1;',
+                '}',
+                '.notifications .toast .column i { font-size: 16px; }',
+                '.notifications .toast.error   .column i { color: #ff6b6b; }',
+                '.notifications .toast.success .column i { color: #0abf30; }',
+                '.notifications .toast .fa-xmark {',
+                '  cursor: pointer;',
+                '  color: #868e96;',
+                '  font-size: 14px;',
+                '  flex-shrink: 0;',
+                '  transition: color 0.2s;',
+                '}',
+                '.notifications .toast .fa-xmark:hover { color: #f1f3f5; }',
+                '@keyframes toastSlideIn {',
+                '  from { transform: translateY(-100%); opacity: 0; }',
+                '  to   { transform: translateY(0);     opacity: 1; }',
+                '}',
+            ].join('');
             document.head.appendChild(style);
         }
+
+        if (typeof window.removeToast !== 'function') {
+            window.removeToast = function (el) { el.remove(); };
+        }
+
+        var toast = document.createElement('li');
+        toast.className = 'toast ' + type;
+
+        var iconClass = type === 'error'
+            ? 'fa-solid fa-circle-xmark'
+            : 'fa-solid fa-circle-check';
+
+        toast.innerHTML = [
+            '<div class="column">',
+            '  <i class="' + iconClass + '"></i>',
+            '  <span>' + message + '</span>',
+            '</div>',
+            '<i class="fa-solid fa-xmark" onclick="removeToast(this.parentElement)"></i>',
+        ].join('');
+
+        container.appendChild(toast);
+
+        var duration = 3000;
+        var start = Date.now();
+        var timer = setInterval(function () {
+            var elapsed = Date.now() - start;
+            var pct = Math.max(0, 100 - (elapsed / duration * 100));
+            toast.style.setProperty('--progress-width', pct + '%');
+            if (pct <= 0) {
+                clearInterval(timer);
+                toast.remove();
+            }
+        }, 50);
     }
 
     //Hiển thị thời gian
