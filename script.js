@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.6.0
+// @version      2.6.1
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -891,6 +891,9 @@
         document.head.appendChild(style);
 
         wrapper.addEventListener('click', function (event) {
+            var menuBtn = document.getElementById('open-auto-menu');
+            if (!menuBtn.contains(event.target)) return; // click vào panel/button → bỏ qua
+
             event.preventDefault();
             event.stopPropagation();
             toggleControlPanel();
