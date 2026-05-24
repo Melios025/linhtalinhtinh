@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.5.11
+// @version      2.5.12
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
