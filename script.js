@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.5.12
+// @version      2.5.13
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -897,11 +897,11 @@
         var style = document.createElement('style');
         style.textContent = `
         #auto-control-panel {
-            position: fixed;
-            top: auto;
-            right: 10px;
-            bottom: 60px;
+            position: absolute;
+            bottom: calc(100% + 8px); /* hiện lên trên nút, cách 8px */
+            right: 0;                 /* căn phải theo wrapper */
             width: 400px;
+            top: auto;
             background: rgba(20, 20, 20, 0.95);
             color: #fff;
             border-radius: 14px;
@@ -1101,7 +1101,8 @@
         }
 `;
         document.head.appendChild(style);
-        document.body.appendChild(panel);
+        var wrapper = document.querySelector('.load-notification.relative');
+        wrapper.appendChild(panel);
         updateButtonStates();
 
         document.getElementById('btn-diemdanh-vandap-tele').addEventListener('click', async function () {
@@ -1165,30 +1166,6 @@
         });
     }
 
-    //update vị trí panel 
-    function updatePanelPosition() {
-        var panel = document.getElementById('auto-control-panel');
-        if (!panel || panel.style.display !== 'block') return;
-
-        var taskBtn = document.getElementById('open-auto-menu');
-        if (!taskBtn) return;
-
-        var rect = taskBtn.getBoundingClientRect();
-        var panelWidth = 400;
-
-        // Luôn cách viền phải 5%
-        panel.style.right = '5%';
-        panel.style.left = 'auto';
-        panel.style.width = panelWidth + 'px';
-
-        var actualHeight = panel.offsetHeight;
-        var top = rect.top - actualHeight - 8;
-        if (top < 10) top = rect.bottom + 8;
-        panel.style.top = top + 'px';
-    }
-
-    window.addEventListener('resize', updatePanelPosition);
-    window.addEventListener('scroll', updatePanelPosition);
 
     //Bật tắt bảng điều khiển
     function toggleControlPanel() {
@@ -1245,7 +1222,13 @@
 
         var wrapper = document.createElement('div');
         wrapper.className = 'load-notification relative';
-        wrapper.innerHTML = '<a href="#" id="open-auto-menu" data-view="hide"><div><span class="material-icons-round1 material-icons-menu">🗐</span></div><span class="nav-label">Auto</span></a>';
+        wrapper.style.cssText = 'position:relative;'; // ← làm anchor cho panel
+        wrapper.innerHTML = `
+        <a href="#" id="open-auto-menu" data-view="hide">
+            <div><span class="material-icons-round1 material-icons-menu">🗐</span></div>
+            <span class="nav-label">Auto</span>
+        </a>
+    `;
 
         if (notifDiv.nextSibling) {
             navItems.insertBefore(wrapper, notifDiv.nextSibling);
@@ -1253,21 +1236,12 @@
             navItems.appendChild(wrapper);
         }
 
-        var style = document.createElement('style');
-        style.textContent = `
-            #open-auto-menu,#open-auto-menu *{font-size:12px;-webkit-tap-highlight-color:rgba(0,0,0,0);color:var(--text,hsla(0,0%,100%,.9));text-decoration:none;}
-            .load-notification.relative #open-auto-menu{display:inline-flex;align-items:center;gap:4px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);transition:background 200ms ease,transform 200ms ease;}
-            .load-notification.relative #open-auto-menu:hover{background:rgba(255,255,255,0.16);transform:translateY(-1px);}
-            .load-notification.relative #open-auto-menu .nav-label{font-size:12px;line-height:1;}
-        `;
         document.head.appendChild(style);
-
         wrapper.addEventListener('click', function (event) {
             event.preventDefault();
             toggleControlPanel();
         });
     }
-
     //Hiển thị bảng cài đặt    
     function renderSettingsPanel() {
         var panel = document.getElementById('settings-panel');
