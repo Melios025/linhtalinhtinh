@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.5.7
+// @version      2.5.8
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -892,7 +892,7 @@
         </div>
 `;
 
-        panel.style.cssText = 'position:fixed;top:auto;right:10px;bottom:60px;width:220px;padding:10px;background:rgba(20,20,20,0.95);color:#fff;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.3);z-index:99999;font-family:Arial,sans-serif;font-size:12px;line-height:1.4;display:none;';
+        panel.style.cssText = 'display:none;';
 
         var style = document.createElement('style');
         style.textContent = `
@@ -927,6 +927,7 @@
             flex-direction: column;
             gap: 10px;
             margin-top: 4px;
+            padding: 0;
         }
 
         /* ===== ROWS ===== */
