@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.5.14
+// @version      2.6.0
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -832,19 +832,109 @@
         });
     }
 
+    //Tạo nút menu
+    function createAutoMenuButton() {
+        if (document.getElementById('open-auto-menu')) return;
+
+        var navItems = document.querySelector('.nav-items');
+        if (!navItems) return;
+
+        var notifDiv = navItems.querySelector('.load-notification');
+        if (!notifDiv) return;
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'load-notification relative';
+        wrapper.style.cssText = 'position:relative;';
+        wrapper.innerHTML = `
+        <a href="#" id="open-auto-menu" data-view="hide">
+            <div><i class="fa-solid fa-robot"></i></div>
+            <span class="nav-label">Auto</span>
+        </a>
+    `;
+
+        if (notifDiv.nextSibling) {
+            navItems.insertBefore(wrapper, notifDiv.nextSibling);
+        } else {
+            navItems.appendChild(wrapper);
+        }
+
+        // Khai báo style ở đây
+        var style = document.createElement('style');
+        style.textContent = `
+        #open-auto-menu, #open-auto-menu * {
+            font-size: 12px;
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+            color: var(--text, hsla(0,0%,100%,.9));
+            text-decoration: none;
+        }
+        .load-notification.relative #open-auto-menu {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 8px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            transition: background 200ms ease, transform 200ms ease;
+        }
+        .load-notification.relative #open-auto-menu:hover {
+            background: rgba(255,255,255,0.16);
+            transform: translateY(-1px);
+        }
+        .load-notification.relative #open-auto-menu .nav-label {
+            font-size: 12px;
+            line-height: 1;
+        }
+    `;
+        var menuBtn = document.getElementById('open-auto-menu');
+        wrapper = menuBtn.closest('.load-notification');
+        document.head.appendChild(style);
+
+        wrapper.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleControlPanel();
+        });
+    }
+
+    //Bật tắt bảng điều khiển
+    function toggleControlPanel() {
+        createControlPanel();
+        var panel = document.getElementById('auto-control-panel');
+        if (!panel) return;
+
+        var isVisible = panel.style.display === 'block';
+        if (isVisible) {
+            panel.style.display = 'none';
+        } else {
+            panel.style.display = 'block';
+            updateButtonStates();
+        }
+
+        var button = document.getElementById('open-auto-menu');
+        if (button) button.setAttribute('aria-expanded', String(!isVisible));
+    }
+
     //Tạo bảng điều khiển
     function createControlPanel() {
         if (document.getElementById('auto-control-panel')) return;
 
+        // Tìm wrapper qua nút open-auto-menu thay vì querySelector
+        var menuBtn = document.getElementById('open-auto-menu');
+        if (!menuBtn) return;
+        var wrapper = menuBtn.closest('.load-notification');
+        if (!wrapper) return;
+
         var panel = document.createElement('div');
         panel.id = 'auto-control-panel';
         panel.innerHTML = `
-        <div class="panel-header">Auto Menu</div>
+       <div class="panel-header">Auto Menu</div>
         <div class="panel-body">
 
             <!-- Hàng 1: 1 lần/ngày -->
             <div class="panel-row">
-                <button id="btn-diemdanh-vandap-tele" class="panel-btn panel-btn-full">Điểm Danh - Tế lễ - Vấn đáp</button>
+                <button id="btn-diemdanh-vandap-tele" class="panel-btn panel-btn-full">Điểm Danh - Tế lễ - Vấn
+                    đáp</button>
                 <button id="btn-auto-toggle" class="panel-btn btn-auto-toggle">✅</button>
                 <button id="btn-setting" class="panel-btn btn-auto-toggle">⚙️</button>
             </div>
@@ -865,17 +955,16 @@
             <button id="btn-khoangmach" class="panel-btn panel-btn-full">Khoáng Mạch</button>
 
             <!-- Tiên Duyên full width -->
-             <div class="panel-row">
-            <button id="btn-tienduyen" class="panel-btn">Tiên Duyên</button>
-            <button id="btn-chucphuc" class="panel-btn">Chúc Phúc</button>
+            <div class="panel-row">
+                <button id="btn-tienduyen" class="panel-btn">Tiên Duyên</button>
+                <button id="btn-chucphuc" class="panel-btn">Chúc Phúc</button>
             </div>
 
             <!-- Đồ Thạch -->
             <button id="btn-dothach" class="panel-btn panel-btn-full">Đồ Thạch</button>
 
             <!-- Link -->
-            <a id="btn-banghoatdong" class="panel-btn panel-btn-full" href="https://hoathinh3d.co/nhiem-vu-hang-ngay" target="_blank">Bảng
-                hoạt động ngày</a>
+            <button id="btn-banghoatdong" class="panel-btn panel-btn-full" onclick="window.open('https://hoathinh3d.co/nhiem-vu-hang-ngay', '_blank')">Bảng hoạt động ngày</button>
 
             <!-- Timer -->
             <div id="timer-display">
@@ -890,7 +979,7 @@
             </div>
             <div id="settings-panel" class="settings-panel hidden"></div>
         </div>
-`;
+    `;
 
         panel.style.cssText = 'display:none;';
 
@@ -898,20 +987,21 @@
         style.textContent = `
         #auto-control-panel {
             position: absolute;
-            bottom: calc(100% + 8px); /* hiện lên trên nút, cách 8px */
-            right: 0;                 /* căn phải theo wrapper */
-            width: 400px;
-            top: auto;
+            top: calc(100% + 8px);
+            right: 0;
+            left: auto;
+            bottom: auto;
+            width: min(400px, calc(100vw - 20px));
+            z-index: 999999;
             background: rgba(20, 20, 20, 0.95);
             color: #fff;
             border-radius: 14px;
             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
             font-family: Arial, sans-serif;
-            font-size: 12px;
             line-height: 1.4;
             padding: 20px;
         }
-            /* ===== HEADER ===== */
+          /* ===== HEADER ===== */
         #auto-control-panel .panel-header {
             display: flex;
             gap: 10px;
@@ -973,11 +1063,12 @@
             position:relative;
             z-index:1;
         }
-        #auto-control-panel a.panel-btn {
+        #auto-control-panel #btn-banghoatdong {
             background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+  
         }
 
-        #auto-control-panel a.panel-btn:hover:not(:disabled) {
+        #auto-control-panel #btn-banghoatdong:hover:not(:disabled) {
         background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
         }
 
@@ -1099,11 +1190,10 @@
         #auto-control-panel .timer-row span:first-child {
             color: #aaa;
         }
-`;
+    `;
+
         document.head.appendChild(style);
-        var wrapper = document.querySelector('.load-notification.relative');
         wrapper.appendChild(panel);
-        updateButtonStates();
 
         document.getElementById('btn-diemdanh-vandap-tele').addEventListener('click', async function () {
             if (this.disabled) return;
@@ -1117,11 +1207,10 @@
         });
         document.getElementById('btn-auto-toggle').addEventListener('click', function () {
             var setting = getUserSetting();
-            var newValue = setting.autoRun === false ? true : false;
-            setting.autoRun = newValue;
+            setting.autoRun = !setting.autoRun;
             localStorage.setItem('userSetting', JSON.stringify(setting));
             updateAutoToggleButton();
-            if (newValue) {
+            if (setting.autoRun) {
                 startAutoExecute();
                 showTempAlert('Auto đã bật', 'success');
             } else {
@@ -1151,8 +1240,8 @@
             if (!this.disabled) runTask(danh_chuc_phuc_api);
         });
         document.getElementById('btn-dothach').addEventListener('click', function () {
-            let now = new Date();
-            let currentHour = now.getHours();
+            var now = new Date();
+            var currentHour = now.getHours();
             var tasks = getDailyTasks();
             if (currentHour >= 6 && currentHour < 13 || currentHour >= 16 && currentHour < 21) {
                 if (!tasks.dothach.betplaced) {
@@ -1160,62 +1249,12 @@
                 } else {
                     showTempAlert('Đã đặt cược rồi', 'error');
                 }
-            } else if (currentHour >= 13 && currentHour < 16 || currentHour >= 21 && currentHour <= 23 || currentHour >= 0 && currentHour < 6) {
+            } else {
                 if (!this.disabled) runTask(nhan_thuong_do_thach);
             }
         });
     }
 
-    //Bật tắt bảng điều khiển
-    function toggleControlPanel() {
-    createControlPanel();
-    var panel = document.getElementById('auto-control-panel');
-    if (!panel) return;
-
-    var isVisible = panel.style.display === 'block';
-    if (isVisible) {
-        panel.style.display = 'none';
-    } else {
-        panel.style.display = 'block';
-        updateButtonStates();
-    }
-
-    var button = document.getElementById('open-auto-menu');
-    if (button) button.setAttribute('aria-expanded', String(!isVisible));
-}
-
-    //Tạo nút menu
-    function createAutoMenuButton() {
-        if (document.getElementById('open-auto-menu')) return;
-
-        var navItems = document.querySelector('.nav-items');
-        if (!navItems) return;
-
-        var notifDiv = navItems.querySelector('.load-notification');
-        if (!notifDiv) return;
-
-        var wrapper = document.createElement('div');
-        wrapper.className = 'load-notification relative';
-        wrapper.style.cssText = 'position:relative;'; // ← làm anchor cho panel
-        wrapper.innerHTML = `
-        <a href="#" id="open-auto-menu" data-view="hide">
-            <div><i class="fa-solid fa-robot"></i></div>
-            <span class="nav-label">Auto</span>
-        </a>
-    `;
-
-        if (notifDiv.nextSibling) {
-            navItems.insertBefore(wrapper, notifDiv.nextSibling);
-        } else {
-            navItems.appendChild(wrapper);
-        }
-
-        document.head.appendChild(style);
-        wrapper.addEventListener('click', function (event) {
-            event.preventDefault();
-            toggleControlPanel();
-        });
-    }
     //Hiển thị bảng cài đặt    
     function renderSettingsPanel() {
         var panel = document.getElementById('settings-panel');
@@ -1529,9 +1568,20 @@
         createControlPanel();
         createAutoMenuButton();
         updateButtonStates();
+        updateTimerDisplay();
         if (!autoMenuInitialized) {
             autoMenuInitialized = true;
-            setInterval(updateButtonStates, 1000);
+            var lastTasksSnapshot = null;
+
+            setInterval(function () {
+                var tasks = getDailyTasks();
+                var snapshot = JSON.stringify(tasks);
+
+                if (snapshot !== lastTasksSnapshot) {
+                    lastTasksSnapshot = snapshot;
+                    updateButtonStates();
+                }
+            }, 1000);
             setInterval(updateTimerDisplay, 1000);
             var setting = getUserSetting();
             if (setting.autoRun !== false) {
