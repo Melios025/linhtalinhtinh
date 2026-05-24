@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.5.5
+// @version      2.5.6
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -211,6 +211,25 @@
 
     //Hàm đánh hoang vực
     async function danh_hoang_vuc_api() {
+        var Tasks = getDailyTasks();
+        var hoangvuc = Tasks?.hoangvuc;
+
+        if (hoangvuc?.done || hoangvuc?.remainingTurn <= 0) {
+            showTempAlert('Đã hết lượt đánh hôm nay');
+            return;
+        }
+
+        if (hoangvuc?.nextTime) {
+            var now = Date.now(); // milliseconds
+            if (now < hoangvuc.nextTime) {
+                var secondsLeft = Math.ceil((hoangvuc.nextTime - now) / 1000);
+                var minutes = Math.floor(secondsLeft / 60);
+                var seconds = secondsLeft % 60;
+                showTempAlert(`Chưa đến lượt đánh, còn ${minutes}p ${seconds}s`);
+                return;
+            }
+        }
+
         var startTime = performance.now();
 
         var res = await fetch('/hoang-vuc', { credentials: 'include' });
@@ -228,13 +247,7 @@
             showTempAlert('Không lấy được token Hoàng Vực');
             return;
         }
-        var Tasks = getDailyTasks();
-        var hoangvuc = Tasks?.hoangvuc;
 
-        if (hoangvuc?.done || hoangvuc?.remainingTurn <= 0) {
-            showTempAlert('Đã hết lượt đánh hôm nay');
-            return;
-        }
         // Lấy boss info
         var bossData = await ajax(hh3dData.act.bossGet, { nonce: token.nonce });
         if (bossData.data.has_pending_rewards) {
@@ -256,20 +269,6 @@
                 showTempAlert('Nhận thưởng thất bại', 'error');
             }
         };
-
-
-        if (hoangvuc?.nextTime) {
-            var now = Date.now(); // milliseconds
-            if (now < hoangvuc.nextTime) {
-                var secondsLeft = Math.ceil((hoangvuc.nextTime - now) / 1000);
-                var minutes = Math.floor(secondsLeft / 60);
-                var seconds = secondsLeft % 60;
-                showTempAlert(`Chưa đến lượt đánh, còn ${minutes}p ${seconds}s`);
-                return;
-            }
-        }
-
-
 
         // Tấn công
         var requestId = 'req_' + Math.random().toString(36).substr(2, 10) + '_' + Date.now();
@@ -330,19 +329,33 @@
 
     //Hàm đánh bí cảnh
     async function danh_bi_canh_api() {
+        var status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
+
+        // Có thưởng chưa nhận → nhận trước
+        if (status.has_pending_reward) {
+            var claim = await resApi('tong-mon/v1/claim-boss-reward', {}, { ignoreSuccess: true });
+            showTempAlert(claim.message || 'Đã nhận thưởng bí cảnh', 'success');
+        }
+
+        // Không có boss → chờ
+        if (!status.has_boss) {
+            showTempAlert('Bí Cảnh: chưa có boss mới', 'error');
+            return;
+        }
+
         var tasks = getDailyTasks();
+
+        // Chưa đến lượt
         if (tasks.bicanh.nextTime && Date.now() < tasks.bicanh.nextTime) {
             var minutesLeft = Math.ceil((tasks.bicanh.nextTime - Date.now()) / 60000);
             throw new Error('Chưa đến lượt đánh Bí Cảnh, còn ' + minutesLeft + ' phút');
         }
 
+        // Lấy remainingTurn từ local hoặc từ status vừa gọi
         var remainingTurnLocal = tasks.bicanh.remainingTurn;
-        if (remainingTurnLocal == null) {
-            var bossInfo = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
-            if (bossInfo.has_boss) {
-                remainingTurnLocal = bossInfo.attack_info.remaining;
-                saveTaskData('bicanh', { remainingTurn: remainingTurnLocal });
-            }
+        if (remainingTurnLocal == null && status.attack_info) {
+            remainingTurnLocal = status.attack_info.remaining;
+            saveTaskData('bicanh', { remainingTurn: remainingTurnLocal });
         }
 
         if (remainingTurnLocal <= 0) {
@@ -352,15 +365,16 @@
         }
 
         if (!remainingTurnLocal) throw new Error('Không lấy được số lượt đánh, vui lòng kiểm tra lại');
+
+        // Đánh boss
         var bossAttack = await resApi('tong-mon/v1/attack-boss');
         showTempAlert(bossAttack.message, 'success');
 
         if (bossAttack.attack_info.remaining <= 0) {
             saveTaskData('bicanh', { done: true, remainingTurn: 0, nextTime: null });
             updateButtonStates();
-        }
-        else {
-            var attackCooldown = await resApi('tong-mon/v1/check-attack-cooldown')
+        } else {
+            var attackCooldown = await resApi('tong-mon/v1/check-attack-cooldown');
             var nextTimeMs = Date.now() + (attackCooldown.cooldown_remaining * 1000);
             saveTaskData('bicanh', {
                 remainingTurn: bossAttack.attack_info.remaining,
@@ -705,7 +719,7 @@
         await ajax(hh3dData.act.hdnReward, { stage: 'stage2' }).catch(e => {
             showTempAlert(e.message || 'Lỗi stage2', 'error');
         });
-        
+
 
         for (var i = 0; i < 4; i++) {
             var res = await fetch('https://hoathinh3d.co/wp-json/lottery/v1/7cdf093b', {
@@ -961,7 +975,10 @@
         }
 
         #auto-control-panel a.panel-btn:hover:not(:disabled) {
-            background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
+        background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+        transition: all 0.2s ease;
         }
 
         #auto-control-panel .panel-btn-full {
