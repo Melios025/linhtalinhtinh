@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.7.3
+// @version      2.7.4
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -14,7 +14,7 @@
 
 (function () {
     'use strict';
-    var SCRIPT_VERSION = 'V2.7.3';
+    var SCRIPT_VERSION = 'V2.7.4';
 
     //Helper function to format text
     function normalizeText(str) {
@@ -365,7 +365,7 @@
 
         status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
         if (!status.has_boss && status.has_pending_boss && !status.boss_contribution.user_has_contributed) {
-
+            var contribute = await resApi('tong-mon/v1/contribute-boss').catch(() => null);
             if (contribute) showTempAlert(contribute.message, 'success');
             return;
         }
