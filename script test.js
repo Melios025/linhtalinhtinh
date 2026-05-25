@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.7
+// @version      2.6.4
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -1912,7 +1912,7 @@
                     Auto Control
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;">
-                    <span class="sp-badge">v2.7</span>
+                    <span class="sp-badge">v2.6.5</span>
                     <button class="sp-close" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
