@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.7.4
+// @version      2.7.5
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -14,7 +14,7 @@
 
 (function () {
     'use strict';
-    var SCRIPT_VERSION = 'V2.7.4';
+    var SCRIPT_VERSION = 'V2.7.5';
 
     //Helper function to format text
     function normalizeText(str) {
@@ -351,6 +351,22 @@
         }
     }
 
+    //Hàm check bí cảnh
+    async function check_bi_canh_api() {
+        var bicanh = getDailyTasks()
+        var status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
+        var attack_cooldown = await resApi('tong-mon/v1/check-attack-cooldown', {}, { ignoreSuccess: true });
+        if (!status.has_boss && status.has_pending_boss && !status.boss_contribution.user_has_contributed) {
+            var contribute = await resApi('tong-mon/v1/contribute-boss').catch(() => null);
+            if (contribute) showTempAlert(contribute.message, 'success');
+            return;
+        }
+        else if (status.has_boss && bicanh.remainingTurn <= 0 && attack_cooldown.can_attack) {
+            saveTaskData('bicanh', { remainingTurn: 5, done: false, nextTime: null });
+            updateButtonStates();
+        }
+    }
+
     //Hàm đánh bí cảnh
     async function danh_bi_canh_api() {
         var status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
@@ -359,15 +375,6 @@
         if (status.has_pending_reward) {
             var claim = await resApi('tong-mon/v1/claim-boss-reward', {}, { ignoreSuccess: true });
             showTempAlert(claim.message || 'Đã nhận thưởng bí cảnh', 'success');
-
-
-        }
-
-        status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
-        if (!status.has_boss && status.has_pending_boss && !status.boss_contribution.user_has_contributed) {
-            var contribute = await resApi('tong-mon/v1/contribute-boss').catch(() => null);
-            if (contribute) showTempAlert(contribute.message, 'success');
-            return;
         }
 
         var tasks = getDailyTasks();
@@ -2281,6 +2288,9 @@
             var setting = getUserSetting();
             if (setting.autoRun !== false) {
                 startAutoExecute();
+            }
+            if (setting.bicanh?.auto) {
+                runTask(check_bi_canh_api)
             }
             if (setting.chucphuc?.auto) {
                 runTask(danh_chuc_phuc_api);
