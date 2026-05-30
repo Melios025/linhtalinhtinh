@@ -1,19 +1,17 @@
 // ==UserScript==
-// @name         Tool for clone
+// @name         Tool for clone test
 // @namespace    http://tampermonkey.net/
-// @version      2.6.4
+// @version      2.7.5
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=tampermonkey.net
-// @connect      raw.githubusercontent.com
-// @updateURL    https://raw.githubusercontent.com/Melios025/hh3d/refs/heads/main/script.js
-// @downloadURL  https://raw.githubusercontent.com/Melios025/hh3d/refs/heads/main/script.js
+// @require      file:///C:/Users/Admin/Desktop/Document/hh3d/script.js
 // @grant        none
 // ==/UserScript==
-
 (function () {
     'use strict';
+    var SCRIPT_VERSION = 'V2.7.5';
 
     //Helper function to format text
     function normalizeText(str) {
@@ -350,6 +348,22 @@
         }
     }
 
+    //Hàm check bí cảnh
+    async function check_bi_canh_api() {
+        var bicanh = getDailyTasks()
+        var status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
+        var attack_cooldown = await resApi('tong-mon/v1/check-attack-cooldown', {}, { ignoreSuccess: true });
+        if (!status.has_boss && status.has_pending_boss && !status.boss_contribution.user_has_contributed) {
+            var contribute = await resApi('tong-mon/v1/contribute-boss').catch(() => null);
+            if (contribute) showTempAlert(contribute.message, 'success');
+            return;
+        }
+        else if (status.has_boss && bicanh.remainingTurn <= 0 && attack_cooldown.can_attack) {
+            saveTaskData('bicanh', { remainingTurn: 5, done: false, nextTime: null });
+            updateButtonStates();
+        }
+    }
+
     //Hàm đánh bí cảnh
     async function danh_bi_canh_api() {
         var status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
@@ -358,16 +372,7 @@
         if (status.has_pending_reward) {
             var claim = await resApi('tong-mon/v1/claim-boss-reward', {}, { ignoreSuccess: true });
             showTempAlert(claim.message || 'Đã nhận thưởng bí cảnh', 'success');
-
-            status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
-
-            if (!status.has_boss && status.has_pending_boss && !status.boss_contribution.user_has_contributed) {
-
-                if (contribute) showTempAlert(contribute.message, 'success');
-                return;
-            }
         }
-
 
         var tasks = getDailyTasks();
 
@@ -961,7 +966,10 @@
         var panel = document.createElement('div');
         panel.id = 'auto-control-panel';
         panel.innerHTML = `
-       <div class="panel-header">Auto Menu</div>
+       <div class="panel-header">
+            <span>Auto Menu</span>
+            <span class="panel-version">${SCRIPT_VERSION}</span>
+       </div>
         <div class="panel-body">
 
             <!-- Hàng 1: 1 lần/ngày -->
@@ -1033,20 +1041,31 @@
             font-family: Arial, sans-serif;
             line-height: 1.4;
             padding: 20px;
+            padding-top: 0;
         }
           /* ===== HEADER ===== */
         #auto-control-panel .panel-header {
+            position: relative;
             display: flex;
-            gap: 10px;
             justify-content: center;
-            text-align: center;
+            align-items: center;
             font-size: 18px;
             font-weight: bold;
             color: #60a5fa;
             margin-bottom: 12px;
             margin-top: 12px;
         }
-
+        #auto-control-panel .panel-version {
+            position: absolute;
+            right: 0;
+            font-size: 10px;
+            font-weight: 700;
+            color: #eeeeee;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            padding: 2px 9px;
+            letter-spacing: .04em;
+            }
         /* ===== BODY ===== */
         #auto-control-panel .panel-body {
             display: flex;
@@ -1355,7 +1374,7 @@
             letter-spacing: .05em;
             color: #fff;
         }
-        #settings-panel-box .sp-title i { color: #6366f1; font-size: 15px; }
+        #settings-panel-box .sp-title i { color: #ffffff; font-size: 15px; }
         #settings-panel-box .sp-badge {
             font-size: 10px;
             font-weight: 700;
@@ -1912,7 +1931,7 @@
                     Auto Control
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;">
-                    <span class="sp-badge">v2.6.5</span>
+                    <span class="sp-badge">${SCRIPT_VERSION}</span>
                     <button class="sp-close" title="Đóng"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
@@ -2115,9 +2134,22 @@
 
 
         if (runningTask) {
-            html += `<div class="timer-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;"><span>Đang chạy</span><span style="color:#fbbf24;">${runningTask}</span></div>`;
+            html += `<div id="running-task-row" class="timer-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;"><span>Đang chạy</span><span style="color:#fbbf24;">${runningTask}</span></div>`;
         }
         timerDisplay.innerHTML = html || '<div class="timer-row">Không có task nào đang chờ</div>';
+
+        if (runningTask) {
+            setTimeout(function () {
+                var row = document.getElementById('running-task-row');
+                if (row) {
+                    row.remove();
+                    var timerEl = document.getElementById('timer-display');
+                    if (timerEl && timerEl.querySelectorAll('.timer-row').length === 0) {
+                        timerEl.remove();
+                    }
+                }
+            }, 30000);
+        }
     }
 
     //Chạy task với xử lý lỗi chung
@@ -2253,6 +2285,9 @@
             var setting = getUserSetting();
             if (setting.autoRun !== false) {
                 startAutoExecute();
+            }
+            if (setting.bicanh?.auto) {
+                runTask(check_bi_canh_api)
             }
             if (setting.chucphuc?.auto) {
                 runTask(danh_chuc_phuc_api);

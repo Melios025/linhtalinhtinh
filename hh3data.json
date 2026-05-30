@@ -1,106 +1,54 @@
 {
-    "loggedIn": "1",
-    "userId": "183932",
-    "securityToken": "MTgzOTMyfDE3NzkxMzIyMTh8YmNmY2M5OGQ1Y2MwNmFlNjI1N2NjZjA2ZTNhOTgzM2Y0NDUxZGQxNGQyMjM0ZTg3YWE0N2ExYmJkMjA3MjdiMg==",
-    "tokenType": "normal",
-    "pageId": "671222",
-    "adminAjax": "https://hoathinh3d.co/wp-admin/admin-ajax.php",
-    "themeAjax": "https://hoathinh3d.co/wp-content/themes/halimmovies-child/hh3d-ajax.php",
-    "restAction": "https://hoathinh3d.co/wp-json/hh3d/v1/action",
-    "restBase": "https://hoathinh3d.co/wp-json",
-    "restNonce": "114165e2ea",
-    "act": {
-        "tltmOpen": "af509f04",
-        "tltmTimer": "ffb60efd",
-        "plOpen": "461299f0",
-        "plTimer": "b4c27465",
-        "plClaim": "6a2a8539",
-        "kmList": "c87386dd",
-        "kmEnter": "114c937f",
-        "kmUsers": "5306023b",
-        "kmClaim": "548d5c21",
-        "kmBuy": "89cef745",
-        "kmReward": "b63f55f3",
-        "kmCheck": "46f4caeb",
-        "kmNotif": "3eb0566b",
-        "kmOwner": "23fd6991",
-        "kmAttack": "75575bc9",
-        "kmLeave": "a94021b3",
-        "kmRefresh": "7dd820ca",
-        "bossCheckElem": "381f5488",
-        "bossTimer": "0c46bec2",
-        "bossHistory": "5a165f6f",
-        "bossBoard": "5880a2bb",
-        "bossAttack": "bf1e5f82",
-        "bossGet": "a4e2d8d5",
-        "bossBalance": "3fe157dc",
-        "bossBuy": "d097d4f8",
-        "bossInventory": "4f5a709b",
-        "bossOpenChest": "ed4bc65a",
-        "bossActivate": "21fed213",
-        "dtExchange": "156104e0",
-        "dtLoad": "12983bfd",
-        "dtBet": "6046ae94",
-        "dtClaim": "4692c6cd",
-        "dtNewbie": "c3573684",
-        "dtMyBetHistory": "c8a94811",
-        "dtWinHistory": "2fe81165",
-        "vdLoad": "a8d9d5c3",
-        "vdSave": "192d3e92",
-        "lotterySpin": "7cdf093b",
-        "lotteryHistory": "ac628ac0",
-        "hdnReward": "b82f4d91"
-    },
-    "lastUpdatedDate": "20/05/2026",
-    "dailyTasks": {
-        "done": false
-    },
-    "hdnReward": {
-        "done": true
-    },
-    "diemdanh": {
-        "done": true
-    },
-    "thiluyen": {
-        "nextTime": null,
-        "done": true,
-        "currentStage": 0
-    },
-    "bicanh": {
-        "nextTime": null,
-        "done": true,
-        "remainingTurn": 0
-    },
-    "dothach": {
-        "betplaced": true,
-        "turn": 2,
-        "stoneBetted1": 1779267600422,
-        "stoneBetted2": 1779267600590
-    },
-    "hoangvuc": {
-        "nextTime": 1779285549000,
-        "done": true,
-        "remainingTurn": 0
-    },
-    "khoangmach": {
-        "nextTime": 1779286636444,
-        "done": false,
-        "is_in": true,
-        "tuvi_current": 102,
-        "tuvi_max": 300
-    },
-    "phucloi": {
-        "nextTime": null,
-        "done": true,
-        "currentChest": 1
-    },
-    "tienduyen": {
-        "done": true
-    },
-    "tele": {
-        "done": true
-    },
-    "vandap": {
-        "done": true
-    }
+  "loggedIn": "1",
+  "userId": "178956",
+  "securityToken": "MTc4OTU2fDE3Nzk5OTQ3Njd8MjIyZTU5ZjE2ODMwNGI4MDk5YTI1ZmRiOWQ0NDU4OGNiOWI5ZGY2NDAwOTE0NTE0MGU0NzdmNzcxNGU3ZTgzNg==",
+  "tokenType": "normal",
+  "pageId": "874991",
+  "adminAjax": "https://hoathinh3d.co/wp-admin/admin-ajax.php",
+  "themeAjax": "https://hoathinh3d.co/wp-content/themes/halimmovies-child/hh3d-ajax.php",
+  "restAction": "https://hoathinh3d.co/wp-json/hh3d/v1/action",
+  "restBase": "https://hoathinh3d.co/wp-json",
+  "restNonce": "b50e7e59de",
+  "act": {
+    "tltmOpen": "ac2e013b",
+    "tltmTimer": "ed986282",
+    "plOpen": "2d81d91c",
+    "plTimer": "d4177930",
+    "plClaim": "3c0ae397",
+    "kmList": "0e2d6942",
+    "kmEnter": "b35d06b7",
+    "kmUsers": "6edbc452",
+    "kmClaim": "d2f1b1d5",
+    "kmBuy": "739eaf31",
+    "kmReward": "67ca37c5",
+    "kmCheck": "7d363190",
+    "kmNotif": "1c5b55ef",
+    "kmOwner": "2bd27caa",
+    "kmAttack": "94548d45",
+    "kmLeave": "4aa5b734",
+    "kmRefresh": "ca9155a1",
+    "bossCheckElem": "77c35c61",
+    "bossTimer": "a899b69f",
+    "bossHistory": "0f8d90f9",
+    "bossBoard": "2c7efd01",
+    "bossAttack": "3bcf73de",
+    "bossGet": "c7c1dbf5",
+    "bossBalance": "f52e13d1",
+    "bossBuy": "a4ee49e9",
+    "bossInventory": "5a45fba4",
+    "bossOpenChest": "68ef002d",
+    "bossActivate": "3395bed1",
+    "dtExchange": "b7c3e6d9",
+    "dtLoad": "89ece0c8",
+    "dtBet": "dda4a276",
+    "dtClaim": "819908d3",
+    "dtNewbie": "3a5106f8",
+    "dtMyBetHistory": "a7e5cd25",
+    "dtWinHistory": "2ef4459f",
+    "vdLoad": "7cfa6143",
+    "vdSave": "e5bbed90",
+    "lotterySpin": "fa2f7691",
+    "lotteryHistory": "5b457f54",
+    "hdnReward": "103342f6"
+  }
 }

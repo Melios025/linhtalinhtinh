@@ -9,12 +9,13 @@
 // @connect      raw.githubusercontent.com
 // @updateURL    https://raw.githubusercontent.com/Melios025/hh3d/refs/heads/main/script.js
 // @downloadURL  https://raw.githubusercontent.com/Melios025/hh3d/refs/heads/main/script.js
+// @require      file:///C:/Users/Admin/Desktop/Document/hh3d/script.js
 // @grant        none
 // ==/UserScript==
 
 (function () {
     'use strict';
-    var SCRIPT_VERSION = 'V2.7.5';
+    var SCRIPT_VERSION = 'V2.7.6';
 
     //Helper function to format text
     function normalizeText(str) {
@@ -120,7 +121,7 @@
 
 
     //Hàm xử lý ajax
-    function ajax(action, extraParams) {
+    function ajax(action, extraParams, options = {}) {
         if (typeof hh3dData === 'undefined') return Promise.reject(new Error('hh3dData not found'));
         var params = Object.assign({
             action: action,
@@ -139,7 +140,7 @@
                 return data;
             })
             .then(function (data) {
-                if (!data.success) throw new Error(`[${action}] ${data.data?.error || data.data?.message || data.data || 'Request thất bại'}`);
+                if (!options.ignoreSuccess && !data.success) throw new Error(`[${action}] ${data.data?.error || data.data?.message || data.data || 'Request thất bại'}`);
                 return data;
             });
     }
@@ -353,6 +354,7 @@
 
     //Hàm check bí cảnh
     async function check_bi_canh_api() {
+
         var bicanh = getDailyTasks()
         var status = await resApi('tong-mon/v1/get-boss-status', {}, { ignoreSuccess: true });
         var attack_cooldown = await resApi('tong-mon/v1/check-attack-cooldown', {}, { ignoreSuccess: true });
@@ -361,8 +363,11 @@
             if (contribute) showTempAlert(contribute.message, 'success');
             return;
         }
-        else if (status.has_boss && bicanh.remainingTurn <= 0 && attack_cooldown.can_attack) {
+        else if (status.has_boss && bicanh.bicanh.done && attack_cooldown.can_attack) {
             saveTaskData('bicanh', { remainingTurn: 5, done: false, nextTime: null });
+            saveTaskData('dailyTasks', { done: false })
+            showTempAlert('Đã có lượt đánh mới', 'success')
+            startAutoExecute();
             updateButtonStates();
         }
     }
@@ -670,6 +675,9 @@
             // Reset để chuẩn bị đặt lượt 2
             saveTaskData('dothach', { betplaced: false, turn: 2, stoneBetted1: null, stoneBetted2: null });
             tasks = getDailyTasks();
+        } else {
+            var claimReward = await ajax(hh3dData.act.dtClaim, {}, { ignoreSuccess: true })
+            showTempAlert(claimReward.success ? 'Đã nhận thưởng ngày hôm qua' : claimReward.data?.message || claimReward.message, claimReward.success ? 'success' : 'error')
         }
 
         if (tasks.dothach.betplaced == true && tasks.dothach.turn == turn) {
@@ -756,7 +764,7 @@
 
 
         for (var i = 0; i < 4; i++) {
-            var res = await fetch('https://hoathinh3d.co/wp-json/lottery/v1/7cdf093b', {
+            var res = await fetch('https://hoathinh3d.co/wp-json/lottery/v1/' + hh3dData.act.lotterySpin, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -782,6 +790,7 @@
 
 
     }
+
     //Update button
     function updateButtonStates() {
         updateAutoToggleButton();
@@ -1805,7 +1814,7 @@
                 </label>
                 <div class="sp-item sp-input-row">
                     <span class="sp-label"><i class="fa-solid fa-hashtag"></i>Turn</span>
-                    <input type="number" class="sp-field sp-number" data-path="dothach.turn" placeholder="—"/>
+                    <input type="number" min="0" max="2" class="sp-field sp-number" data-path="dothach.turn" placeholder="—"/>
                 </div>
                 <div class="sp-item sp-input-row">
                     <span class="sp-label"><i class="fa-solid fa-id-badge"></i>Stone 1 ID</span>
@@ -2003,7 +2012,7 @@
                 '  top: 30px;',
                 '  left: 50%;',
                 '  transform: translateX(-50%);',
-                '  z-index: 999999;',
+                '  z-index: 9999999;',
                 '  margin: 0;',
                 '  padding: 0;',
                 '  list-style: none;',
@@ -2168,10 +2177,11 @@
             .catch(function (err) {
                 showTempAlert(err.message || 'Thất bại', 'error');
                 if (key) {
-                    saveTaskData(key, { retryAfter: Date.now() + 5 * 60 * 1000 });
+                    saveTaskData(key, { retryAfter: Date.now() + 60 * 1000 });
                 }
                 setTimeout(function () {
                     autoExecuteRunning = false;
+                    location.reload();
                 }, 3000); // giảm xuống vì không cần chờ lâu nữa
             });
     }
@@ -2286,6 +2296,12 @@
             }, 1000);
             setInterval(updateTimerDisplay, 1000);
             var setting = getUserSetting();
+            setTimeout(function () {
+                var panel = document.getElementById('auto-control-panel');
+                if (panel && panel.style.display !== 'block') {
+                    toggleControlPanel();
+                }
+            }, 2000); // delay thêm 2s để đảm bảo mọi thứ đã sẵn sàng trước khi chạy auto
             if (setting.autoRun !== false) {
                 startAutoExecute();
             }
