@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.7.5
+// @version      2.7.7
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -15,7 +15,7 @@
 
 (function () {
     'use strict';
-    var SCRIPT_VERSION = 'V2.7.6';
+    var SCRIPT_VERSION = 'V2.7.7';
 
     //Helper function to format text
     function normalizeText(str) {
@@ -305,23 +305,14 @@
         });
 
         showTempAlert('Đang tấn công... (' + Math.round(performance.now() - startTime) + 'ms)', 'success');
-        var bossTimer = null;
-        if (hh3dData?.securityToken) {
-            try {
-                bossTimer = await ajax(hh3dData.act.bossTimer);
-            } catch (err) {
-                console.warn('bossTimer lỗi:', err);
-            }
-        }
+        var bossTimer = await ajax(hh3dData.act.bossTimer);
 
         var currentTasks = getDailyTasks();
         var currentTurn = currentTasks?.hoangvuc?.remainingTurn ?? 5;
         var newTurn = currentTurn - 1;
 
         var updateObj = { remainingTurn: newTurn };
-        if (bossTimer?.success && bossTimer?.data) {
-            updateObj.nextTime = parseInt(bossTimer.data) + 1 * 60 * 1000; // Thêm 1 phút đệm để chắc chắn đã hết thời gian chờ trên server
-        }
+        updateObj.nextTime = parseInt(bossTimer.data) + 1 * 60 * 1000; // Thêm 1 phút đệm để chắc chắn đã hết thời gian chờ trên server
         if (newTurn <= 0) updateObj.done = true;
         saveTaskData('hoangvuc', updateObj);
         updateButtonStates();
@@ -613,13 +604,13 @@
             var answerIndex;
 
             if (!answer) {
-                answerIndex = Math.floor(Math.random() * 4);
-                showTempAlert(`Không tìm thấy đáp án: ${q.question}, random: ${q.options[answerIndex]}`, 'error');
+                showTempAlert(`Không tìm thấy đáp án: ${q.question}`, 'error');
+                answerIndex = await showManualPicker(q.question, q.options);
             } else {
                 answerIndex = q.options.findIndex(opt => opt === answer);
                 if (answerIndex === -1) {
-                    answerIndex = Math.floor(Math.random() * 4);
-                    showTempAlert(`Đáp án không khớp, random: ${q.options[answerIndex]}`, 'error');
+                    showTempAlert(`Đáp án không khớp: ${answer}`, 'error');
+                    answerIndex = await showManualPicker(q.question, q.options);
                 }
             }
 
@@ -638,6 +629,66 @@
 
         saveTaskData('vandap', { done: true });
         updateButtonStates();
+    }
+
+    //Hàm chọn thủ công vấn đáp
+    function showManualPicker(question, options) {
+        return new Promise((resolve) => {
+            // Tạo overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 999999;
+            display: flex; align-items: center; justify-content: center;
+        `;
+
+            // Tạo popup
+            const popup = document.createElement('div');
+            popup.style.cssText = `
+            background: #1a1a2e; color: #fff;
+            border-radius: 12px; padding: 24px;
+            max-width: 500px; width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            font-family: Arial, sans-serif;
+        `;
+
+            // Tiêu đề
+            popup.innerHTML = `
+            <div style="color: #ff6b6b; font-size: 13px; margin-bottom: 8px;">
+                ⚠️ Không tìm thấy đáp án — Chọn thủ công
+            </div>
+            <div style="font-size: 16px; font-weight: bold; margin-bottom: 20px; line-height: 1.5;">
+                ${normalizeText(question)}
+            </div>
+        `;
+
+            // 4 đáp án
+            options.forEach((opt, index) => {
+                const btn = document.createElement('button');
+                btn.textContent = `${index + 1}. ${normalizeText(opt)}`;
+                btn.style.cssText = `
+                display: block; width: 100%;
+                padding: 12px 16px; margin-bottom: 10px;
+                background: #16213e; color: #fff;
+                border: 1px solid #0f3460;
+                border-radius: 8px; cursor: pointer;
+                font-size: 14px; text-align: left;
+                transition: background 0.2s;
+            `;
+                btn.onmouseover = () => btn.style.background = '#0f3460';
+                btn.onmouseout = () => btn.style.background = '#16213e';
+                btn.onclick = () => {
+                    document.body.removeChild(overlay);
+                    resolve(index);
+                };
+                popup.appendChild(btn);
+            });
+
+            overlay.appendChild(popup);
+            document.body.appendChild(overlay);
+        });
     }
 
     //Hàm đánh đồ thạch
@@ -677,7 +728,7 @@
             tasks = getDailyTasks();
         } else {
             var claimReward = await ajax(hh3dData.act.dtClaim, {}, { ignoreSuccess: true })
-            showTempAlert(claimReward.success ? 'Đã nhận thưởng ngày hôm qua' : claimReward.data?.message || claimReward.message, claimReward.success ? 'success' : 'error')
+            showTempAlert(claimReward.success ? 'Đã nhận thưởng ngày hôm qua' : claimReward.data?.message || claimReward.message, claimReward.success ? 'success' : 'error' || claimReward.data)
         }
 
         if (tasks.dothach.betplaced == true && tasks.dothach.turn == turn) {
@@ -2181,7 +2232,6 @@
                 }
                 setTimeout(function () {
                     autoExecuteRunning = false;
-                    location.reload();
                 }, 3000); // giảm xuống vì không cần chờ lâu nữa
             });
     }
