@@ -19,13 +19,34 @@
 
     //Helper function to format text
     function normalizeText(str) {
-        return str
-            .normalize('NFC')
-            .replace(/[《》「」『』""''?？!！]/g, '')  // bỏ dấu câu đặc biệt
-            .replace(/\s+/g, ' ')
-            .trim()
-            .toLowerCase();
-    }
+    return str
+        // 1. Chuẩn hóa Unicode encoding
+        .normalize('NFC')
+        
+        // 2. Chuyển chữ hoa → thường TRƯỚC khi xử lý khác
+        .toLowerCase()
+        
+        // 3. Chuẩn hóa "đ" → "d" (hay bị lẫn)
+        .replace(/đ/g, 'd')
+        
+        // 4. Bỏ tất cả dấu câu & ký tự đặc biệt
+        .replace(/[《》「」『』""''`~@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?!！?？。、，。；：]/g, '')
+        
+        // 5. Chuẩn hóa số La Mã hay gặp trong tên nhân vật/arc
+        .replace(/\biii\b/g, '3').replace(/\bii\b/g, '2').replace(/\biv\b/g, '4')
+        .replace(/\bvi\b/g, '6').replace(/\bvii\b/g, '7').replace(/\bviii\b/g, '8')
+        
+        // 6. Chuẩn hóa các từ viết tắt tiếng Việt hay gặp
+        .replace(/\bko\b/g, 'không').replace(/\bk\b/g, 'không')
+        .replace(/\bđc\b/g, 'được').replace(/\bdc\b/g, 'được')
+        .replace(/\bvs\b/g, 'với').replace(/\bbt\b/g, 'bình thường')
+        .replace(/\bntn\b/g, 'như thế nào').replace(/\bntv\b/g, 'như thế vầy')
+        
+        // 7. Chuẩn hóa khoảng trắng (tab, newline, double space...)
+        .replace(/[\t\n\r]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
     //Tạo dữ liệu đầu ngày
     function getDailyTasks() {
         var today = new Date().toLocaleDateString('en-GB'); // e.g. 19/05/2026
