@@ -466,7 +466,7 @@
             if (_mazeSocket && _mazeSocket.connected) {
                 _mazeSocket.emit('heartbeat', { userId: hh3dData.userId });
             }
-        }, 30000);
+        }, 25000);
     }
 
     function stopHeartbeat() {
@@ -523,6 +523,10 @@
             });
             // ── disconnect ───────────────────────────
             sock.on('disconnect', function (reason) {
+                console.log('[MC] Disconnect reason:', reason);
+                console.log('[MC] Socket id:', sock.id);
+                console.log('[MC] Was connected:', sock.connected);
+                console.log('[MC] Time:', new Date().toLocaleTimeString());
                 if (mazeState) mazeState.status = 'reconnecting';
             });
 
@@ -713,10 +717,8 @@
 
         // ── Game loop ─────────────────────────────────────────────
         while (true) {
-            console.log('[MC] đầu loop — currentStatus.status:', currentStatus.status);
             try {
                 if (currentStatus.status === 'battle') {
-                    _mazeSocket.emit('mc_join_room', roomCode);
                     Object.assign(mazeState, { status: 'battle', stage: currentStatus.floor });
 
                     var result = await waitForMazeEvent(roomCode, d =>
@@ -734,6 +736,7 @@
 
                         if (result.floor_complete) {
                             // Ải 5 xong → chờ lượt mới
+                            console.log('Đã hoàn thành ải ' + mazeState.stage + ', chờ lượt mới...' + currentStatus.floor);
                             currentStatus.status = 'waiting';
                             Object.assign(mazeState, { status: 'waiting', bossHpPct: 0, lastResult: 'win' });
                         } else {
@@ -748,6 +751,7 @@
                     );
 
                     if (!me?.is_ready) {
+                        Object.assign(mazeState, { status: 'waiting' });
                         currentStatus = await sendReady(roomCode, mcOptions);
                         showTempAlert('Đã sẵn sàng! Chờ host bắt đầu...', 'success');
                     } else {
@@ -765,12 +769,15 @@
             } catch (e) {
                 if (e.message === 'Timeout chờ event' || e.message === 'Timeout gọi ready') {
                     await new Promise(r => setTimeout(r, 2000));
-                    currentStatus = await getMazeStatusCached(true);
+                    showTempAlert('Không nhận được phản hồi từ server, đang kiểm tra lại trạng thái...', 'error');
+                    currentStatus = await getMazeStatusSafe(); // ← đổi từ Cached sang Safe để luôn lấy mới
                     if (!currentStatus.in_room) {
                         mazeState = null; stopHeartbeat();
                         showTempAlert('Đã hoàn thành Mê Cung!', 'success');
                         break;
                     }
+                    // Sync lại status để loop tiếp đúng nhánh
+                    Object.assign(mazeState, { status: currentStatus.status });
                     continue;
                 }
                 throw e;
@@ -1195,7 +1202,8 @@
                     var used = Math.min((tasks.luyenDan.danHuanUsed || 0) + 3, 27);
                     saveTaskData('luyenDan', { danHuanUsed: used });
                     showTempAlert('Đã tune! Stability: ' + craft.stability_pct + '% — Đan Huân: ' + used + '/27', 'success');
-                    if (_ldState.tuneCount + 1 >= 3) {
+                    _ldState.tuneCount += 1;
+                    if (_ldState.tuneCount >= 3) {
                         showTempAlert('Đã tune đủ ' + tuneSuccessCount + ' lần! Chờ 5 phút rồi leave...', 'success');
                         _ldState.tuneCount = 3;
                         break;
@@ -1261,6 +1269,10 @@
         var res = await resApi(LD.decompose, { pill_id: pillId }, { headers: { 'X-Ld-Token': ldToken } });
         showTempAlert(res.message || 'Phân giải thành công!', 'success');
         loadLdPillSelect();
+        var ldToken = await getLdToken();
+        var state = await getLdState(ldToken);
+        _ldInfoCache = getLdInfoFromStateData(state);
+        renderLdPillSelect(_ldInfoCache.pillStacks || []);
     }
 
     // ── LOAD PILL SELECT ──────────────────────────────────────
@@ -2020,15 +2032,14 @@
         if (btnLdLeave) {
             var craft = _ldInfoCache && _ldInfoCache.craft;
             var isDong = _ldInfoCache && !!_ldInfoCache.dongServingOwnerName;
-
+            console.log(craft, isDong);
             var canLeave = false;
             if (isDong && craft) {
                 if (craft.status === 'ready') {
                     canLeave = true; // lò đã xong, đan đồng có thể rời bất cứ lúc nào
                 } else if (craft.status === 'crafting'
-                    && craft.duration_sec !== undefined && craft.timer_left_sec !== undefined) {
-                    var elapsed = craft.duration_sec - craft.timer_left_sec;
-                    if (elapsed >= 5 * 60) canLeave = true;
+                    && craft.unstable_phase_sec == 300) {
+                    canLeave = true;
                 }
             }
             btnLdLeave.disabled = !canLeave;
@@ -3549,131 +3560,135 @@
 
     //Hiển thị thời gian
     function updateTimerDisplay() {
-    var timerDisplay = document.getElementById('timer-display');
-    if (!timerDisplay) return;
+        var timerDisplay = document.getElementById('timer-display');
+        if (!timerDisplay) return;
 
-    var tasks = getDailyTasks();
-    var now = Date.now();
-    var html = '';
+        var tasks = getDailyTasks();
+        var now = Date.now();
+        var html = '';
 
-    var items = [
-        { key: 'phucloi', label: 'Phúc Lợi' },
-        { key: 'hoangvuc', label: 'Hoàng Vực' },
-        { key: 'thiluyen', label: 'Thí Luyện' },
-        { key: 'bicanh', label: 'Bí Cảnh' },
-        { key: 'khoangmach', label: 'Khoáng Mạch' },
-    ];
+        var items = [
+            { key: 'phucloi', label: 'Phúc Lợi' },
+            { key: 'hoangvuc', label: 'Hoàng Vực' },
+            { key: 'thiluyen', label: 'Thí Luyện' },
+            { key: 'bicanh', label: 'Bí Cảnh' },
+            { key: 'khoangmach', label: 'Khoáng Mạch' },
+        ];
 
-    items.forEach(function (item) {
-        var t = tasks[item.key];
-        if (!t || t.done) return;
+        items.forEach(function (item) {
+            var t = tasks[item.key];
+            if (!t || t.done) return;
 
-        var nextTime = t.nextTime;
-        if (!nextTime || now >= nextTime) {
-            html += `<div class="timer-row"><span>${item.label}</span><span style="color:#4ade80;">Ready</span></div>`;
-        } else {
-            var remaining = nextTime - now;
-            var mins = Math.floor(remaining / 60000);
-            var secs = Math.floor((remaining % 60000) / 1000);
-            html += `<div class="timer-row"><span>${item.label}</span><span>${mins}p ${secs}s</span></div>`;
-        }
-    });
-
-    // Mê Cung
-    if (mazeState) {
-        var mc = mazeState;
-
-        var statusLabel = mc.status === 'battle' ? '⚔️ Đang đánh' : mc.status === 'ready' ? '✅ Sẵn sàng' : '⏳ Chờ';
-        var elColor = { kim: '#c0c0c0', moc: '#4ade80', thuy: '#38bdf8', hoa: '#f87171', tho: '#d97706' };
-        var elName = { kim: 'Kim', moc: 'Mộc', thuy: 'Thủy', hoa: 'Hỏa', tho: 'Thổ' };
-        var hpColor = mc.bossHpPct > 50 ? '#4ade80' : mc.bossHpPct > 20 ? '#fbbf24' : '#f87171';
-        var resColor = mc.lastResult === 'win' ? '#4ade80' : '#f87171';
-        var resLabel = mc.lastResult === 'win' ? '✅ Thắng' : mc.lastResult === 'lose' ? '❌ Thua' : '';
-
-        html += '<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;">';
-        html += '<div class="timer-row"><span>Mê Cung</span><span style="color:#fbbf24;">' + statusLabel + ' — Ải ' + (mc.stage || 0) + '</span></div>';
-
-        if (mc.status === 'battle' && mc.bossHpPct !== null && mc.bossHpPct !== undefined) {
-            html += '<div style="position:relative;margin:16px 0 4px;">'
-                + '<div style="height:4px;background:#2d3448;border-radius:2px;overflow:hidden;">'
-                + '<div style="width:' + mc.bossHpPct + '%;height:100%;background:' + hpColor + ';border-radius:2px;transition:width 0.8s ease-out;"></div>'
-                + '</div>'
-                + '<div style="position:absolute; top:-20px;left:' + Math.min(mc.bossHpPct, 90) + '%;transform:translateX(-50%);font-size:14px;color:' + hpColor + ';white-space:nowrap;transition:left 0.8s ease-out;">' + mc.bossHpPct + '%</div>'
-                + '</div>';
-            html += '<div class="timer-row"; style="margin-top:6px";>'
-                + '<span style="color:' + (elColor[mc.bossElement] || '#fff') + ';">' + (elName[mc.bossElement] || mc.bossElement || '?') + '</span>'
-                + (resLabel ? '<span style="color:' + resColor + ';">' + resLabel + '</span>' : '')
-                + '</div>';
-        } else if (resLabel) {
-            html += '<div class="timer-row"><span style="color:#aaa;">Vòng trước</span><span style="color:' + resColor + ';">' + resLabel + '</span></div>';
-        }
-
-        html += '</div>';
-    }
-
-    // Luyện Đan           
-    if (_ldState) {
-        var ld = _ldState;
-        var tierLabel = { ha: 'Hạ Phẩm', trung: 'Trung Phẩm', thuong: 'Thượng Phẩm', cuc: 'Cực Phẩm' };
-        var tasks2 = getDailyTasks();
-        var danHuanUsed = tasks2.luyenDan ? (tasks2.luyenDan.danHuanUsed || 0) : 0;
-        var isDong = ld.role === 'dong';
-
-        var roleText = isDong
-            ? ('⚗️ ' + (_ldInfoCache && _ldInfoCache.dongServingOwnerName ? _ldInfoCache.dongServingOwnerName : ''))
-            : ('🤝 ' + (_ldInfoCache && _ldInfoCache.buddyNames && _ldInfoCache.buddyNames.length
-                ? _ldInfoCache.buddyNames.join(', ')
-                : ''));
-
-        html += '<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;">';
-        if (roleText.trim() !== '⚗️' && roleText.trim() !== '🤝') {
-    html += '<div class="timer-row"><span>Luyện Đan</span><span style="color:#d97706;">' + roleText + '</span></div>';
-}
-
-        if (ld.tier) {
-            html += '<div class="timer-row"><span>Phẩm</span><span>' + (tierLabel[ld.tier] || ld.tier) + '</span></div>';
-        }
-
-        if (isDong && ld.stabilityPct !== undefined) {
-            var bandColor = ld.stabilityPct > 68 ? '#4ade80' : ld.stabilityPct > 40 ? '#fbbf24' : '#f87171';
-            html += '<div class="timer-row"><span>Ổn định</span><span style="color:' + bandColor + ';">' + ld.stabilityPct.toFixed(1) + '%</span></div>';
-            if (ld.tuneCount !== undefined && ld.tuneSlotsLeft !== undefined) {
-                html += '<div class="timer-row"><span>Tune</span><span>' + ld.tuneCount + ' lần</span></div>';
-            }
-            html += '<div class="timer-row"><span>Đan Huân hôm nay</span><span style="color:' + (danHuanUsed >= 27 ? '#4ade80' : '#fbbf24') + ';">' + danHuanUsed + '/27</span></div>';
-        }
-
-        if (!isDong && ld.finishAt) {
-            var remaining2 = Math.max(0, tasks2.luyenDan.finishAtTs * 1000 - Date.now());
-            var doneColor, doneText;
-            if (ld.status === 'ready' || remaining2 <= 0) {
-                doneColor = '#4ade80';
-                doneText = 'Hoàn thành! Bấm Thu Đan';
+            var nextTime = t.nextTime;
+            if (!nextTime || now >= nextTime) {
+                html += `<div class="timer-row"><span>${item.label}</span><span style="color:#4ade80;">Ready</span></div>`;
             } else {
-                var mins2 = Math.floor(remaining2 / 60000);
-                var secs2 = Math.floor((remaining2 % 60000) / 1000);
-                doneColor = '#fff';
-                doneText = mins2 + 'p ' + secs2 + 's';
+                var remaining = nextTime - now;
+                var mins = Math.floor(remaining / 60000);
+                var secs = Math.floor((remaining % 60000) / 1000);
+                html += `<div class="timer-row"><span>${item.label}</span><span>${mins}p ${secs}s</span></div>`;
             }
-            html += '<div class="timer-row"><span>Còn lại</span><span style="color:' + doneColor + ';">' + doneText + '</span></div>';
+        });
+
+        // Mê Cung
+        if (mazeState) {
+            var mc = mazeState;
+
+            var statusLabel = mc.status === 'battle' ? '⚔️ Đang đánh' : mc.status === 'ready' ? '✅ Sẵn sàng' : '⏳ Chờ';
+            var elColor = { kim: '#c0c0c0', moc: '#4ade80', thuy: '#38bdf8', hoa: '#f87171', tho: '#d97706' };
+            var elName = { kim: 'Kim', moc: 'Mộc', thuy: 'Thủy', hoa: 'Hỏa', tho: 'Thổ' };
+            var hpColor = mc.bossHpPct > 50 ? '#4ade80' : mc.bossHpPct > 20 ? '#fbbf24' : '#f87171';
+            var resColor = mc.lastResult === 'win' ? '#4ade80' : '#f87171';
+            var resLabel = mc.lastResult === 'win' ? '✅ Thắng' : mc.lastResult === 'lose' ? '❌ Thua' : '';
+
+            html += '<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;">';
+            html += '<div class="timer-row"><span>Mê Cung</span><span style="color:#fbbf24;">' + statusLabel + ' — Ải ' + (mc.stage || 0) + '</span></div>';
+
+            if (mc.status === 'battle' && mc.bossHpPct !== null && mc.bossHpPct !== undefined) {
+                html += '<div style="position:relative;margin:16px 0 4px;">'
+                    + '<div style="height:4px;background:#2d3448;border-radius:2px;overflow:hidden;">'
+                    + '<div style="width:' + mc.bossHpPct + '%;height:100%;background:' + hpColor + ';border-radius:2px;transition:width 0.8s ease-out;"></div>'
+                    + '</div>'
+                    + '<div style="position:absolute; top:-20px;left:' + Math.min(mc.bossHpPct, 90) + '%;transform:translateX(-50%);font-size:14px;color:' + hpColor + ';white-space:nowrap;transition:left 0.8s ease-out;">' + mc.bossHpPct + '%</div>'
+                    + '</div>';
+                html += '<div class="timer-row"; style="margin-top:6px";>'
+                    + '<span style="color:' + (elColor[mc.bossElement] || '#fff') + ';">' + (elName[mc.bossElement] || mc.bossElement || '?') + '</span>'
+                    + (resLabel ? '<span style="color:' + resColor + ';">' + resLabel + '</span>' : '')
+                    + '</div>';
+            } else if (resLabel) {
+                html += '<div class="timer-row"><span style="color:#aaa;">Vòng trước</span><span style="color:' + resColor + ';">' + resLabel + '</span></div>';
+            }
+
+            html += '</div>';
         }
 
-        html += '</div>';
-    }
+        // Luyện Đan           
+        // Luyện Đan — dùng localStorage làm source of truth
+        var ldLocal = tasks.luyenDan;
+        if (ldLocal && (ldLocal.dangCo || ldLocal.role === 'dong')) {
+            var tierLabel = { ha: 'Hạ Phẩm', trung: 'Trung Phẩm', thuong: 'Thượng Phẩm', cuc: 'Cực Phẩm' };
+            var danHuanUsed = ldLocal.danHuanUsed || 0;
+            var isDong = ldLocal.role === 'dong';
 
-    if (runningTask) {
-        html += `<div class="timer-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;"><span>Đang chạy</span><span style="color:#fbbf24;">${runningTask}</span></div>`;
+            var roleText = isDong
+                ? ('⚗️ ' + (_ldInfoCache && _ldInfoCache.dongServingOwnerName ? _ldInfoCache.dongServingOwnerName : ''))
+                : ('🤝 ' + (_ldInfoCache && _ldInfoCache.buddyNames && _ldInfoCache.buddyNames.length
+                    ? _ldInfoCache.buddyNames.join(', ')
+                    : ''));
 
-        if (!window._runningTaskTimer) {
-            window._runningTaskTimer = setTimeout(function () {
-                runningTask = null;
-                window._runningTaskTimer = null;
-            }, 30000);
+            html += '<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;">';
+
+            if (roleText.trim() !== '⚗️' && roleText.trim() !== '🤝') {
+                html += '<div class="timer-row"><span>Luyện Đan</span><span style="color:#d97706;">' + roleText + '</span></div>';
+            }
+
+            // Tier — từ _ldState nếu có
+            if (_ldState && _ldState.tier) {
+                html += '<div class="timer-row"><span>Phẩm</span><span>' + (tierLabel[_ldState.tier] || _ldState.tier) + '</span></div>';
+            }
+
+            // Acc 2 — stability + tune + đan huân
+            if (isDong && _ldState && _ldState.stabilityPct !== undefined) {
+                var bandColor = _ldState.stabilityPct > 68 ? '#4ade80' : _ldState.stabilityPct > 40 ? '#fbbf24' : '#f87171';
+                html += '<div class="timer-row"><span>Ổn định</span><span style="color:' + bandColor + ';">' + _ldState.stabilityPct.toFixed(1) + '%</span></div>';
+                if (_ldState.tuneCount !== undefined && _ldState.tuneSlotsLeft !== undefined) {
+                    html += '<div class="timer-row"><span>Tune</span><span>' + _ldState.tuneCount + ' lần</span></div>';
+                }
+                html += '<div class="timer-row"><span>Đan Huân hôm nay</span><span style="color:' + (danHuanUsed >= 27 ? '#4ade80' : '#fbbf24') + ';">' + danHuanUsed + '/27</span></div>';
+            }
+
+            // Acc 1 — timer từ localStorage
+            if (!isDong && ldLocal.finishAtTs) {
+                var remaining = Math.max(0, ldLocal.finishAtTs * 1000 - Date.now());
+                var doneColor, doneText;
+                if (remaining <= 0) {
+                    doneColor = '#4ade80';
+                    doneText = 'Hoàn thành! Bấm Thu Đan';
+                } else {
+                    var mins = Math.floor(remaining / 60000);
+                    var secs = Math.floor((remaining % 60000) / 1000);
+                    doneColor = '#fff';
+                    doneText = mins + 'p ' + secs + 's';
+                }
+                html += '<div class="timer-row"><span>Còn lại</span><span style="color:' + doneColor + ';">' + doneText + '</span></div>';
+            }
+
+            html += '</div>';
         }
-    }
 
-    timerDisplay.innerHTML = html || '<div class="timer-row">Không có task nào đang chờ</div>';
-}
+        if (runningTask) {
+            html += `<div class="timer-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;"><span>Đang chạy</span><span style="color:#fbbf24;">${runningTask}</span></div>`;
+
+            if (!window._runningTaskTimer) {
+                window._runningTaskTimer = setTimeout(function () {
+                    runningTask = null;
+                    window._runningTaskTimer = null;
+                }, 30000);
+            }
+        }
+
+        timerDisplay.innerHTML = html || '<div class="timer-row">Không có task nào đang chờ</div>';
+    }
 
     //Chạy task với xử lý lỗi chung
     var runningTask = null;
