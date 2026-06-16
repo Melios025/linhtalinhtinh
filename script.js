@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tool for clone
 // @namespace    http://tampermonkey.net/
-// @version      2.7.7
+// @version      3.0
 // @description  Tool auto các hoạt động hàng ngày trên hoathinh3d.co, phục vụ mục đích cá nhân
 // @author       Melios
 // @match        https://hoathinh3d.co/*
@@ -11,45 +11,28 @@
 // @downloadURL  https://raw.githubusercontent.com/Melios025/hh3d/refs/heads/main/script.js
 // @require      file:///C:/Users/Admin/Desktop/Document/hh3d/script.js
 // @grant        none
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
     'use strict';
-    var SCRIPT_VERSION = 'V2.7.7';
+    var SCRIPT_VERSION = 'V3.0';
 
     //Helper function to format text
     function normalizeText(str) {
-    return str
-        // 1. Chuẩn hóa Unicode encoding
-        .normalize('NFC')
-        
-        // 2. Chuyển chữ hoa → thường TRƯỚC khi xử lý khác
-        .toLowerCase()
-        
-        // 3. Chuẩn hóa "đ" → "d" (hay bị lẫn)
-        .replace(/đ/g, 'd')
-        
-        // 4. Bỏ tất cả dấu câu & ký tự đặc biệt
-        .replace(/[《》「」『』""''`~@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?!！?？。、，。；：]/g, '')
-        
-        // 5. Chuẩn hóa số La Mã hay gặp trong tên nhân vật/arc
-        .replace(/\biii\b/g, '3').replace(/\bii\b/g, '2').replace(/\biv\b/g, '4')
-        .replace(/\bvi\b/g, '6').replace(/\bvii\b/g, '7').replace(/\bviii\b/g, '8')
-        
-        // 6. Chuẩn hóa các từ viết tắt tiếng Việt hay gặp
-        .replace(/\bko\b/g, 'không').replace(/\bk\b/g, 'không')
-        .replace(/\bđc\b/g, 'được').replace(/\bdc\b/g, 'được')
-        .replace(/\bvs\b/g, 'với').replace(/\bbt\b/g, 'bình thường')
-        .replace(/\bntn\b/g, 'như thế nào').replace(/\bntv\b/g, 'như thế vầy')
-        
-        // 7. Chuẩn hóa khoảng trắng (tab, newline, double space...)
-        .replace(/[\t\n\r]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-}
+        return str
+            .normalize('NFC')
+            .toLowerCase()
+            .replace(/đ/g, 'd')
+            .replace(/[《》「」『』""''`~@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?!！?？。、，。；：]/g, '')
+            // bỏ hết phần số La Mã
+            .replace(/[\t\n\r]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
     //Tạo dữ liệu đầu ngày
     function getDailyTasks() {
-        var today = new Date().toLocaleDateString('en-GB'); // e.g. 19/05/2026
+        var today = new Date().toLocaleDateString('en-GB');
         var raw = localStorage.getItem('daily_tasks');
         var data = raw ? JSON.parse(raw) : null;
         if (!data || data.lastUpdatedDate !== today) {
@@ -66,7 +49,9 @@
                 phucloi: { nextTime: null, done: false, currentChest: 1 },
                 tienduyen: { done: false },
                 tele: { done: false },
-                vandap: { done: false }
+                vandap: { done: false },
+                mecung: { huyen_tinh_daily_total: 0, huyen_tinh_daily_cap: 200 },
+                luyenDan: { dangCo: false, danHuanUsed: 0, finishAtTs: null, role: null },
             };
             localStorage.setItem('daily_tasks', JSON.stringify(data));
         }
@@ -140,7 +125,6 @@
         return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
     }
 
-
     //Hàm xử lý ajax
     function ajax(action, extraParams, options = {}) {
         if (typeof hh3dData === 'undefined') return Promise.reject(new Error('hh3dData not found'));
@@ -180,25 +164,29 @@
             body = Object.assign({ action: endpoint }, body);
         }
 
+        // Merge thêm headers từ options nếu có
+        var headers = Object.assign({
+            'Content-Type': 'application/json',
+            'X-WP-Nonce': hh3dData.restNonce
+        }, options.headers || {});
+
         var res = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-WP-Nonce': hh3dData.restNonce
-            },
+            headers: headers,
             credentials: 'include',
             body: JSON.stringify(body)
         })
             .then(async function (r) {
                 var data = await r.json();
-                if (!r.ok) {
-                    throw new Error(data.message);
-                }
+                if (!r.ok) throw new Error(data.message);
                 return data;
             })
             .then(function (data) {
-                if (!options.ignoreSuccess && !data.success) {
-                    throw new Error(data.data?.error || data.data?.message || data.message || data.data || `${endpoint} thất bại`);
+                var isSuccess = data.success === true || data.ok === true;
+                if (!options.ignoreSuccess && !isSuccess) {
+                    var errMsg = data.data?.error || data.data?.message || data.message;
+                    if (typeof errMsg !== 'string') errMsg = `${endpoint} thất bại`;
+                    throw new Error(errMsg);
                 }
                 return data;
             });
@@ -250,7 +238,7 @@
             var nextWaitMs = (parseInt(partsAfter[0]) * 60 + parseInt(partsAfter[1])) * 1000;
             saveTaskData('phucloi', {
                 currentChest: chestId + 1,
-                nextTime: nextWaitMs > 0 ? Date.now() + nextWaitMs : null
+                nextTime: nextWaitMs > 0 ? Date.now() + nextWaitMs + 10000 : null
             });
         }
     }
@@ -339,6 +327,1016 @@
         updateButtonStates();
     }
 
+    //Hàm đánh mê cung
+    var mazeState = null;
+    var cryptoKeyPromise = null;
+    var _mazeSocket = null;
+    var _heartbeatInterval = null;
+
+    const MAZE = {
+        userStatus: 'me-cung/v1/user-status',
+        joinRoom: 'https://hoathinh3d.co/wp-json/me-cung/v1/join-by-invite',
+        ready: 'me-cung/v1/ready',
+        leave: 'me-cung/v1/leave',
+    };
+    const MAZE_MAX_WAIT = 60 * 1000;
+    const MC_TOKEN_TTL = 5 * 60 * 1000;
+    var _mcTokenCache = null;
+    var _mcTokenExpiry = 0;
+
+    async function getMcToken(forceRefresh = false) {
+        var now = Date.now();
+        if (!forceRefresh && _mcTokenCache && now < _mcTokenExpiry) {
+            return _mcTokenCache;
+        }
+        // Chỉ load iframe khi thực sự cần
+        return new Promise(function (resolve, reject) {
+            var iframe = document.createElement('iframe');
+            iframe.src = '/me-cung';
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            iframe.onload = function () {
+                try {
+                    var scripts = iframe.contentDocument.querySelectorAll('script:not([src])');
+                    var token = null;
+                    scripts.forEach(function (s) {
+                        var match = s.textContent.match(/mcToken:\s*"([^"]+)"/);
+                        if (match) token = match[1];
+                    });
+                    document.body.removeChild(iframe);
+                    if (token) {
+                        _mcTokenCache = token;
+                        _mcTokenExpiry = Date.now() + MC_TOKEN_TTL;
+                        resolve(token);
+                    } else {
+                        reject(new Error('Không tìm thấy mcToken'));
+                    }
+                } catch (e) {
+                    document.body.removeChild(iframe);
+                    reject(e);
+                }
+            };
+            iframe.onerror = function () {
+                document.body.removeChild(iframe);
+                reject(new Error('Không load được iframe'));
+            };
+        });
+    };
+
+    function parseMazeToken(input) {
+        input = input.trim();
+        try {
+            var url = new URL(input);
+            var token = url.searchParams.get('invite');
+            if (token) return token;
+        } catch (e) { }
+        return input;
+    }
+
+    var _statusCache = null;
+    var _statusCacheTime = 0;
+    const STATUS_CACHE_TTL = 3000; // 3 giây
+
+    async function getMazeStatusCached(forceRefresh = false) {
+        var now = Date.now();
+        if (!forceRefresh && _statusCache && (now - _statusCacheTime) < STATUS_CACHE_TTL) {
+            return _statusCache;
+        }
+        _statusCache = await getMazeStatusSafe();
+        _statusCacheTime = Date.now();
+        return _statusCache;
+    }
+
+    async function getMazeStatus() {
+        var res = await fetch('https://hoathinh3d.co/wp-json/' + MAZE.userStatus, {
+            method: 'GET',
+            headers: { 'X-WP-Nonce': hh3dData.restNonce },
+            credentials: 'include',
+        });
+        if (!res.ok) {
+            var err = new Error('HTTP ' + res.status);
+            err.status = res.status;
+            throw err;
+        }
+        return res.json();
+    }
+
+    function getMcCryptoKey() {
+        if (cryptoKeyPromise) return cryptoKeyPromise;
+        cryptoKeyPromise = (function () {
+            var key = ['SDNkQFMwY2szdEszeSE=', 'MjAyNiNTZWN1cmUkMzJDaHIh'].map(function (s) { return atob(s); }).join('');
+            return window.crypto.subtle.importKey('raw', new TextEncoder().encode(key), { name: 'AES-CBC' }, false, ['decrypt']);
+        })();
+        return cryptoKeyPromise;
+    }
+
+    async function decryptMazeEvent(raw) {
+        if (!raw || !raw._e) return raw;
+        try {
+            var parts = String(raw._e).split(':');
+            if (parts.length !== 2) return raw;
+            var iv = new Uint8Array(parts[0].length / 2);
+            for (var i = 0; i < parts[0].length; i += 2) iv[i / 2] = parseInt(parts[0].slice(i, i + 2), 16);
+            var enc = Uint8Array.from(atob(parts[1]), function (c) { return c.charCodeAt(0); });
+            var key = await getMcCryptoKey();
+            var dec = await window.crypto.subtle.decrypt({ name: 'AES-CBC', iv: iv }, key, enc);
+            return JSON.parse(new TextDecoder().decode(dec));
+        } catch (e) { return raw; }
+    }
+
+    async function getMazeStatusSafe() {
+        var delays = [1000, 2000, 4000];
+        for (var i = 0; i <= delays.length; i++) {
+            try {
+                return await getMazeStatus();
+            } catch (e) {
+                var is503 = e.status === 503 || (e.message && e.message.includes('503'));
+                if (is503 && i < delays.length) {
+                    await new Promise(r => setTimeout(r, delays[i]));
+                } else {
+                    throw e;
+                }
+            }
+        }
+    }
+    //  HEARTBEAT — độc lập, không bị clear bởi disconnect
+    function startHeartbeat() {
+        if (_heartbeatInterval) return; // đã chạy rồi
+        _heartbeatInterval = setInterval(function () {
+            if (_mazeSocket && _mazeSocket.connected) {
+                _mazeSocket.emit('heartbeat', { userId: hh3dData.userId });
+            }
+        }, 30000);
+    }
+
+    function stopHeartbeat() {
+        if (_heartbeatInterval) {
+            clearInterval(_heartbeatInterval);
+            _heartbeatInterval = null;
+        }
+    }
+
+    //  SOCKET — kết nối 1 lần, giữ sống liên tục
+    function connectMazeSocket() {
+        return new Promise(function (resolve, reject) {
+            // Nếu socket đang sống → dùng lại luôn
+            if (_mazeSocket && _mazeSocket.connected) {
+                return resolve(_mazeSocket);
+            }
+
+            // Dọn socket cũ nếu đã chết
+            if (_mazeSocket) {
+                _mazeSocket.removeAllListeners();
+                _mazeSocket.disconnect();
+                _mazeSocket = null;
+            }
+
+            var resolved = false;
+            var timer = setTimeout(function () {
+                if (!resolved) reject(new Error('Timeout kết nối socket'));
+            }, 10000);
+
+            var sock = io('https://online.hoathinhtq.net', {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: Infinity,
+            });
+
+            // ── connect ──────────────────────────────
+            sock.on('connect', function () {
+                _mazeSocket = sock;
+                sock.emit('register_user', parseInt(hh3dData.userId));
+            });
+
+            // ── registration confirmed ────────────────
+            sock.on('registration_confirmed', function () {
+                if (mazeState && mazeState.roomCode) {
+                    sock.emit('mc_join_room', mazeState.roomCode);
+                }
+                startHeartbeat();
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timer);
+                    resolve(sock);
+                }
+            });
+            // ── disconnect ───────────────────────────
+            sock.on('disconnect', function (reason) {
+                if (mazeState) mazeState.status = 'reconnecting';
+            });
+
+
+            // ── heartbeat ack ────────────────────────
+            sock.on('heartbeat_ack', function () {
+            });
+
+            // ── connect error (lần đầu) ──────────────
+            sock.on('connect_error', function (e) {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timer);
+                    reject(new Error('Kết nối socket thất bại: ' + e.message));
+                }
+            });
+
+            // ── mc_room_event ────────────────────────
+            sock.on('mc_room_event', async function (raw) {
+                var data = await decryptMazeEvent(raw);
+                if (!data || !data.eventType) return;
+                if (!mazeState || data.roomCode !== mazeState.roomCode) return;
+
+                if (data.eventType === 'attack_result') {
+                    Object.assign(mazeState, {
+                        status: data.all_dead ? 'waiting' : 'battle',
+                        stage: data.boss && data.boss.stage,
+                        bossName: data.boss && data.boss.name,
+                        bossElement: data.boss && data.boss.element,
+                        bossHpPct: data.boss && data.boss.hp_max
+                            ? Math.round(data.boss.hp / data.boss.hp_max * 100) : 0,
+                        timeLeft: data.stage_time_left_seconds,
+                        lastResult: data.boss_dead ? 'win' : data.all_dead ? 'lose' : mazeState.lastResult,
+                        nextStage: data.next_stage || mazeState.nextStage,
+                        allDead: data.all_dead,
+                        myHp: data.members && data.members.find(function (m) {
+                            return String(m.user_id) === String(hh3dData.userId);
+                        }),
+                    });
+                }
+            });
+        });
+    }
+
+    //  WAIT FOR EVENT
+    function waitForMazeEvent(roomCode, condition) {
+        return new Promise(function (resolve, reject) {
+            var timer = setTimeout(function () {
+                cleanup();
+                reject(new Error('Timeout chờ event'));
+            }, MAZE_MAX_WAIT);
+
+            function cleanup() {
+                clearTimeout(timer);
+                if (_mazeSocket) _mazeSocket.off('mc_room_event', handler);
+            }
+
+            async function handler(raw) {
+                var data = await decryptMazeEvent(raw);
+                if (!data || data.roomCode !== roomCode) return;
+                if (condition(data)) {
+                    cleanup();
+                    resolve(data);
+                }
+            }
+
+            if (!_mazeSocket) { reject(new Error('Chưa có socket')); return; }
+            _mazeSocket.on('mc_room_event', handler);
+        });
+    }
+
+    //  CLAIM CHEST (helper tránh duplicate code)
+    async function claimBoss5Chest(roomCode, result, mcOptions) {
+        if (!result.floor_complete) return;
+        var myToken = result.chest_tokens && result.chest_tokens[String(hh3dData.userId)];
+        if (!myToken) return;
+
+        showTempAlert('Nhận rương ải 5 sau 7 giây...', 'success');
+        await new Promise(r => setTimeout(r, 7000));
+
+        try {
+            var res = await resApi('me-cung/v1/claim-boss5-chest', {
+                room_code: roomCode,
+                chest_token: myToken,
+            }, mcOptions);
+            showTempAlert('Đã nhận rương ải 5!', 'success');
+
+            if (res && res.reward) {
+                var tasks = getDailyTasks();
+                tasks.mecung.huyen_tinh_daily_total = res.reward.huyen_tinh_daily_total ?? tasks.mecung.huyen_tinh_daily_total;
+                tasks.mecung.huyen_tinh_daily_cap = res.reward.huyen_tinh_daily_cap ?? tasks.mecung.huyen_tinh_daily_cap;
+                localStorage.setItem('daily_tasks', JSON.stringify(tasks));
+
+                if (tasks.mecung.huyen_tinh_daily_total >= tasks.mecung.huyen_tinh_daily_cap) {
+                    var btn = document.getElementById('btn-mecung');
+                    if (btn && !btn.querySelector('.mc-done-badge')) {
+                        var badge = document.createElement('span');
+                        badge.className = 'mc-done-badge';
+                        badge.textContent = '✓';
+                        badge.style.cssText = 'margin-left:auto;font-size:14px;opacity:0.9;';
+                        btn.appendChild(badge);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[MC] Nhận rương thất bại:', e);
+        }
+    }
+
+    //  READY — retry 3 lần
+    async function sendReady(roomCode, mcOptions) {
+        await new Promise(r => setTimeout(r, 2000));
+        var delays = [0, 5000, 8000];
+
+        for (var i = 0; i < 3; i++) {
+            try {
+                if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+
+                // Luôn fetch token mới cho ready, không tái dùng token cũ
+                var freshToken = await getMcToken(true); // force refresh
+                var opts = { headers: { 'X-Mc-Action-Token': freshToken } };
+
+                await Promise.race([
+                    resApi(MAZE.ready, { room_code: roomCode, is_ready: 1 }, opts),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), 10000)),
+                ]);
+
+                var check = await getMazeStatusCached(true);
+                var me = check.members?.find(m => String(m.user_id) === String(hh3dData.userId));
+                if (me?.is_ready) return check;
+
+            } catch (e) {
+                if (i === 2) throw new Error('Ready thất bại sau 3 lần thử: ' + e.message);
+                console.warn(`Retry ${i + 1}`, e.message);
+            }
+        }
+    }
+    //  MAIN
+    async function danh_me_cung_api(inviteInput) {
+        showTempAlert('Đang kết nối socket...', 'success');
+        await connectMazeSocket();
+
+        var token = inviteInput ? parseMazeToken(inviteInput) : null;
+
+        // 1 lần getMcToken duy nhất cho cả flow
+        var mcToken = await getMcToken();
+        var mcOptions = { headers: { 'X-Mc-Action-Token': mcToken } };
+
+        // 1 lần getMazeStatus duy nhất ban đầu
+        var currentStatus = await getMazeStatusCached(true);
+
+        if (token) {
+            if (currentStatus.in_room) {
+                showTempAlert('Đang rời phòng cũ...', 'success');
+                var leaveToken = await getMcToken(true);
+                await resApi(MAZE.leave, { room_code: currentStatus.room_code },
+                    { headers: { 'X-Mc-Action-Token': leaveToken } });
+
+                // Dùng socket event thay vì poll HTTP
+                await new Promise(function (resolve) {
+                    var timeout = setTimeout(resolve, 5000); // fallback 5s
+                    _mazeSocket.once('mc_room_event', async function (raw) {
+                        var data = await decryptMazeEvent(raw);
+                        if (data?.eventType === 'user_left') {
+                            clearTimeout(timeout);
+                            resolve();
+                        }
+                    });
+                });
+
+                currentStatus = await getMazeStatusCached(true);
+                if (currentStatus.in_room) throw new Error('Rời phòng thất bại');
+            }
+
+            var joinToken = await getMcToken(true);
+            await resApi(MAZE.joinRoom, { token },
+                { headers: { 'X-Mc-Action-Token': joinToken } });
+            currentStatus = await getMazeStatusCached(true); // 1x sau join
+            if (!currentStatus.in_room) throw new Error('Vào phòng thất bại');
+        } else {
+            if (!currentStatus.in_room) throw new Error('Bạn chưa ở trong phòng nào');
+        }
+
+        var roomCode = currentStatus.room_code;
+        _mazeSocket.emit('mc_join_room', roomCode);
+        showTempAlert('Đã vào phòng ' + roomCode + '!', 'success');
+        mazeState = { status: 'waiting', roomCode, stage: currentStatus.floor || 1 };
+
+        // ── Game loop ─────────────────────────────────────────────
+        while (true) {
+            console.log('[MC] đầu loop — currentStatus.status:', currentStatus.status);
+            try {
+                if (currentStatus.status === 'battle') {
+                    _mazeSocket.emit('mc_join_room', roomCode);
+                    Object.assign(mazeState, { status: 'battle', stage: currentStatus.floor });
+
+                    var result = await waitForMazeEvent(roomCode, d =>
+                        d.eventType === 'attack_result' && (d.boss_dead || d.all_dead)
+                    );
+
+                    if (result.all_dead) {
+                        showTempAlert('Thua! Chờ lượt mới...', 'error');
+                        await new Promise(r => setTimeout(r, 1500)); // buffer nhỏ cho chắc
+                        currentStatus = await getMazeStatusSafe();
+                        Object.assign(mazeState, { status: 'waiting', stage: currentStatus.floor || mazeState.stage });
+                    } else {
+                        showTempAlert('Ải ' + (result.stage_complete || mazeState.stage) + ' thắng!', 'success');
+                        await claimBoss5Chest(roomCode, result, mcOptions);
+
+                        if (result.floor_complete) {
+                            // Ải 5 xong → chờ lượt mới
+                            currentStatus.status = 'waiting';
+                            Object.assign(mazeState, { status: 'waiting', bossHpPct: 0, lastResult: 'win' });
+                        } else {
+                            // Ải 1-4 → tiếp tục battle
+                            Object.assign(mazeState, { status: 'battle', bossHpPct: 0, lastResult: 'win' });
+                        }
+                    }
+
+                } else {
+                    var me = currentStatus.members?.find(
+                        m => String(m.user_id) === String(hh3dData.userId)
+                    );
+
+                    if (!me?.is_ready) {
+                        currentStatus = await sendReady(roomCode, mcOptions);
+                        showTempAlert('Đã sẵn sàng! Chờ host bắt đầu...', 'success');
+                    } else {
+                        showTempAlert('Đã ready, chờ host bắt đầu...', 'success');
+                    }
+
+                    Object.assign(mazeState, { status: 'ready', stage: currentStatus.floor || mazeState.stage });
+
+                    var firstAttack = await waitForMazeEvent(roomCode, d => d.eventType === 'attack_result');
+                    showTempAlert('Ải ' + firstAttack.boss.stage + ' — ' + firstAttack.boss.name + ' bắt đầu!', 'success');
+                    Object.assign(mazeState, { status: 'battle' });
+                    currentStatus.status = 'battle';
+                }
+
+            } catch (e) {
+                if (e.message === 'Timeout chờ event' || e.message === 'Timeout gọi ready') {
+                    await new Promise(r => setTimeout(r, 2000));
+                    currentStatus = await getMazeStatusCached(true);
+                    if (!currentStatus.in_room) {
+                        mazeState = null; stopHeartbeat();
+                        showTempAlert('Đã hoàn thành Mê Cung!', 'success');
+                        break;
+                    }
+                    continue;
+                }
+                throw e;
+            }
+        }
+    }
+
+    // ============================================================
+    // LUYỆN ĐAN
+    // ============================================================
+    const LD = {
+        sessionToken: 'hh3d/v1/luyen-dan/session-token',
+        invite: 'hh3d/v1/luyen-dan/dong/invite',
+        respond: 'hh3d/v1/luyen-dan/dong/respond',
+        start: 'hh3d/v1/luyen-dan/start',
+        tune: 'hh3d/v1/luyen-dan/tune',
+        state: 'hh3d/v1/luyen-dan/state',
+        leave: 'hh3d/v1/luyen-dan/dong/leave',
+        friends: 'hh3d/v1/luyen-dan/friends',
+        collect: 'hh3d/v1/luyen-dan/collect',
+        decompose: 'hh3d/v1/luyen-dan/decompose'
+    };
+
+    var _ldState = null;
+    var _ldInfoCache = null;
+
+    // ── Token cache ───────────────────────────────────────────
+    var _ldTokenCache = null;
+    var _ldTokenExpiresAt = 0;
+
+    async function getLdToken() {
+        var now = Math.floor(Date.now() / 1000);
+        if (_ldTokenCache && now < _ldTokenExpiresAt - 10) return _ldTokenCache;
+        var res = await fetch('https://hoathinh3d.co/wp-json/' + LD.sessionToken, {
+            method: 'GET',
+            headers: { 'X-WP-Nonce': hh3dData.restNonce },
+            credentials: 'include',
+        });
+        var data = await res.json();
+        if (!data.ok) throw new Error('Không lấy được LD token');
+        _ldTokenCache = data.data.security_token;
+        _ldTokenExpiresAt = data.data.expires_at;
+        return _ldTokenCache;
+    }
+
+    //  State 
+    async function getLdState(ldToken) {
+        var res = await fetch('https://hoathinh3d.co/wp-json/' + LD.state, {
+            method: 'GET',
+            headers: {
+                'X-WP-Nonce': hh3dData.restNonce,
+                'X-Ld-Token': ldToken,
+            },
+            credentials: 'include',
+        });
+        var data = await res.json();
+        if (!data.ok) throw new Error(data.message || 'Lỗi lấy LD state');
+        return data;
+    }
+    // ── INIT KHI LOAD TRANG ──────────────────────────────────
+    async function initLdTimerOnLoad() {
+        try {
+            var ldToken = await getLdToken();
+            var state = await getLdState(ldToken);
+            _ldInfoCache = getLdInfoFromStateData(state);  // luôn set cache
+
+            var craft = state.data && state.data.craft;
+            var tasks = getDailyTasks();
+
+            if (craft && craft.status === 'crafting') {
+                _ldState = {
+                    status: 'crafting',
+                    role: tasks.luyenDan && tasks.luyenDan.role || 'owner',
+                    finishAt: craft.finish_at_ts,
+                    tier: craft.ui_tier,
+                    tuneCount: craft.tune_count,
+                    tuneSlotsLeft: craft.tune_huan_slots_left,
+                    stabilityPct: craft.stability_pct,
+                };
+                saveTaskData('luyenDan', { finishAtTs: craft.finish_at_ts, dangCo: true });
+            } else {
+                _ldState = null;
+            }
+        } catch (e) {
+            var tasks = getDailyTasks();
+            if (tasks.luyenDan && tasks.luyenDan.finishAtTs) {
+                _ldState = {
+                    status: 'crafting',
+                    role: tasks.luyenDan.role || 'owner',
+                    finishAt: tasks.luyenDan.finishAtTs,
+                };
+            }
+        }
+    }
+
+    // ── Parse info từ state ───────────────────────────────────
+    function getLdInfoFromStateData(stateData) {
+        if (!stateData || !stateData.data) return null;
+        var d = stateData.data;
+        var craft = d.craft || null;
+        var slots = d.dong_slots || [];
+        var activeBuddies = slots.filter(function (s) { return s && s.userId; });
+        return {
+            buddyNames: activeBuddies.map(function (b) { return b.name || '#' + b.userId; }),
+            buddyIds: activeBuddies.map(function (b) { return b.userId; }),
+            dongServingOwnerName: d.dong_serving ? d.dong_serving.owner_name : null,
+            dongServingOwnerId: d.dong_serving ? d.dong_serving.owner_id : null,
+            craft: craft,
+            materials: d.materials || {},
+            materialKeys: d.material_keys || [],
+            danHuanWallet: d.dan_huan_wallet || 0,
+            danHuanLeft: d.dan_huan_left || 0,
+            recipes: d.recipes || {},
+            pillStacks: d.pill_stacks || []
+        };
+    }
+    // ── Render info box ───────────────────────────────────────
+    function renderLdInfo() {
+        var infoEl = document.getElementById('ld-info-box');
+        if (!infoEl) return;
+        if (!_ldInfoCache) {
+            infoEl.innerHTML = '<span class="ld-info-hint">Chưa có dữ liệu</span>';
+            return;
+        }
+        var lines = [];
+
+        // Đan đồng / chủ lò
+        if (_ldInfoCache.dongServingOwnerName) {
+            lines.push('<span class="ld-info-label"><i class="fa-solid fa-user-tie"></i> Chủ lò:</span>'
+                + '<span class="ld-info-val">' + _ldInfoCache.dongServingOwnerName + '</span>');
+        }
+        if (_ldInfoCache.buddyNames && _ldInfoCache.buddyNames.length > 0) {
+            lines.push('<span class="ld-info-label"><i class="fa-solid fa-user-group"></i> Đan đồng:</span>'
+                + '<span class="ld-info-val">' + _ldInfoCache.buddyNames.join(', ') + '</span>');
+        }
+
+        // Craft info
+        if (_ldInfoCache.craft) {
+            var c = _ldInfoCache.craft;
+            var tierLabel = { ha: 'Hạ Phẩm', trung: 'Trung Phẩm', thuong: 'Thượng Phẩm', cuc: 'Cực Phẩm' };
+            lines.push('<span class="ld-info-label"><i class="fa-solid fa-fire"></i> Lò:</span>'
+                + '<span class="ld-info-val">' + (tierLabel[c.ui_tier] || c.ui_tier || '?') + '</span>');
+            if (c.stability_pct !== undefined) {
+                var col = c.stability_pct > 68 ? '#4ade80' : c.stability_pct > 40 ? '#fbbf24' : '#f87171';
+                lines.push('<span class="ld-info-label"><i class="fa-solid fa-gauge"></i> Ổn định:</span>'
+                    + '<span class="ld-info-val" style="color:' + col + ';">' + c.stability_pct.toFixed(1) + '%</span>');
+            }
+        }
+
+        // Separator
+        lines.push('<div style="width:100%;border-top:1px solid rgba(255,255,255,0.06);margin:4px 0;"></div>');
+
+        var danHuanUsed = getDailyTasks().luyenDan.danHuanUsed || 0;
+        var danHuanMax = 27;
+        var danHuanColor = danHuanUsed >= danHuanMax ? '#4ade80' : '#fbbf24';
+
+        var maxCraftHtml = '';
+        if (_ldInfoCache.materials && _ldInfoCache.recipes) {
+            var tier = (_ldInfoCache.craft && _ldInfoCache.craft.ui_tier) || 'ha';
+            var recipe = _ldInfoCache.recipes[tier] && _ldInfoCache.recipes[tier].vector;
+            if (recipe) {
+                var maxCraft = Infinity;
+                Object.keys(recipe).forEach(function (key) {
+                    var have = _ldInfoCache.materials[key] || 0;
+                    var need = recipe[key];
+                    maxCraft = Math.min(maxCraft, Math.floor(have / need));
+                });
+                if (maxCraft === Infinity) maxCraft = 0;
+                var craftColor = maxCraft === 0 ? '#f87171' : maxCraft < 3 ? '#fbbf24' : '#4ade80';
+                maxCraftHtml = '<span class="ld-info-label"><i class="fa-solid fa-flask"></i> Luyện:</span>'
+                    + '<span class="ld-info-val" style="color:' + craftColor + ';">' + maxCraft + ' lần</span>';
+            }
+        }
+
+        lines.push(
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;width:100%;">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">'
+            + '<span class="ld-info-label"><i class="fa-solid fa-fire-flame-curved"></i> Đan Huân:</span>'
+            + '<span class="ld-info-val">' + _ldInfoCache.danHuanWallet
+            + ' <span style="color:' + danHuanColor + ';font-size:11px;">(' + danHuanUsed + '/' + danHuanMax + ')</span></span>'
+            + '</div>'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">'
+            + maxCraftHtml
+            + '</div>'
+            + '</div>'
+        );
+
+        // Linh Dược — 2 cột
+        if (_ldInfoCache.materialKeys && _ldInfoCache.materialKeys.length) {
+            var matLabel = {
+                kim: '<i class="fa-solid fa-circle" style="color:#c0c0c0;"></i> Kim',
+                moc: '<i class="fa-solid fa-circle" style="color:#4ade80;"></i> Mộc',
+                thuy: '<i class="fa-solid fa-circle" style="color:#38bdf8;"></i> Thủy',
+                hoa: '<i class="fa-solid fa-circle" style="color:#f87171;"></i> Hỏa',
+                tho: '<i class="fa-solid fa-circle" style="color:#d97706;"></i> Thổ',
+                linh_phong_thao: '<i class="fa-solid fa-leaf" style="color:#a3e635;"></i> Linh Phong',
+                huyen_van_thao: '<i class="fa-solid fa-leaf" style="color:#818cf8;"></i> Huyền Vân',
+                thien_de_thao: '<i class="fa-solid fa-leaf" style="color:#f59e0b;"></i> Thiên Đế',
+            };
+
+            var matCells = _ldInfoCache.materialKeys.map(function (key) {
+                var qty = _ldInfoCache.materials[key] || 0;
+                var label = matLabel[key] || key;
+                var color = qty === 0 ? '#f87171' : qty < 10 ? '#fbbf24' : '#e2e8f0';
+                return '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">'
+                    + '<span class="ld-info-label" style="font-size:12px;">' + label + '</span>'
+                    + '<span class="ld-info-val" style="color:' + color + ';font-size:12px;">' + qty + '</span>'
+                    + '</div>';
+            });
+
+            var gridHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;width:100%;">';
+            matCells.forEach(function (cell) { gridHtml += cell; });
+            gridHtml += '</div>';
+
+            lines.push(gridHtml);
+        }
+
+        infoEl.innerHTML = lines.map(function (l) {
+            if (l.startsWith('<div style="display:grid')  // grid 2 cột
+                || l.startsWith('<div style="width:100%')) { // separator
+                return l;
+            }
+            return '<div class="ld-info-row">' + l + '</div>';
+        }).join('');
+    }
+
+    // ── CHỦ LÒ: Mời đan đồng ─────────────────────────────────
+    async function danh_luyen_dan_invite_api(buddyId) {
+        var ldToken = await getLdToken();
+        await resApi(LD.invite, { buddy_id: buddyId }, { headers: { 'X-Ld-Token': ldToken }, ignoreSuccess: true });
+        showTempAlert('Đã mời đan đồng! Đang chờ chấp nhận...', 'success');
+
+        // Poll tối đa 2 phút để chờ đan đồng accept
+        for (var i = 0; i < 24; i++) {
+            await new Promise(function (r) { setTimeout(r, 5000); });
+            var state = await getLdState(ldToken);
+            _ldInfoCache = getLdInfoFromStateData(state);
+            var slots = state.data.dong_slots || [];
+            var hasBuddy = slots.some(function (s) { return s && s.userId; });
+            if (hasBuddy) {
+                showTempAlert('Đan đồng đã chấp nhận!', 'success');
+                return;
+            }
+        }
+        showTempAlert('Đan đồng chưa chấp nhận sau 2 phút.', 'error');
+    }
+
+    // ── CHỦ LÒ: Khai lò ──────────────────────────────────────
+    async function danh_luyen_dan_start_api(tier) {
+        tier = tier || 'ha';
+        var ldToken = await getLdToken();
+
+        // Check có đan đồng chưa
+        var state = await getLdState(ldToken);
+        _ldInfoCache = getLdInfoFromStateData(state);
+
+        var slots = state.data.dong_slots || [];
+        var hasBuddy = slots.some(function (s) { return s && s.userId; });
+        if (!hasBuddy) throw new Error('Chưa có đan đồng trong lò, mời đan đồng trước');
+
+        // Khai lò
+        await resApi(LD.start, { tier: tier }, { headers: { 'X-Ld-Token': ldToken } });
+        showTempAlert('Đã khai lò! Đang lấy thông tin...', 'success');
+
+        // Chờ 5 giây rồi lấy state
+        await new Promise(function (r) { setTimeout(r, 5000); });
+        var stateAfter = await getLdState(ldToken);
+        _ldInfoCache = getLdInfoFromStateData(stateAfter);
+
+        var craft = stateAfter.data && stateAfter.data.craft;
+        _ldState = {
+            status: 'crafting',
+            role: 'owner',
+            finishAt: craft ? craft.finish_at_ts : null,
+            tier: tier,
+            tuneCount: craft ? craft.tune_count : 0,
+            tuneSlotsLeft: craft ? craft.tune_huan_slots_left : 0,
+            stabilityPct: craft ? craft.stability_pct : undefined,
+        };
+
+        // Lưu vào localStorage
+        saveTaskData('luyenDan', {
+            dangCo: true,
+            role: 'owner',
+            finishAtTs: craft ? craft.finish_at_ts + 60 * 1000 : null,
+        });
+        showTempAlert('Lò đã khai! Đan đồng sẽ tự tune.', 'success');
+    }
+
+    // ── ĐAN ĐỒNG: Chấp nhận + chờ lò + tune loop ────────────
+    async function danh_luyen_dan_dong_api() {
+        var ldToken = await getLdToken();
+        var state = await getLdState(ldToken);
+        _ldInfoCache = getLdInfoFromStateData(state);
+        var d = state.data;
+
+        // Nếu đang là đan đồng và có craft đang chạy → resume tune loop
+        var craft = d.craft;
+        if (craft && craft.status === 'crafting') {
+            var tasks = getDailyTasks();
+            if (tasks.luyenDan && tasks.luyenDan.role === 'dong') {
+                showTempAlert('Tiếp tục tune loop...', 'success');
+                _ldState = {
+                    status: 'crafting',
+                    role: 'dong',
+                    finishAt: craft.finish_at_ts,
+                    tier: craft.ui_tier,
+                    tuneCount: craft.tune_count,
+                    tuneSlotsLeft: craft.tune_huan_slots_left,
+                    stabilityPct: craft.stability_pct,
+                };
+                await runLdTuneLoop(ldToken);
+                return;
+            }
+        }
+
+        // Flow bình thường
+        if (d.dong_invites_in && d.dong_invites_in.length > 0) {
+            var invite = d.dong_invites_in[0];
+            showTempAlert('Chấp nhận lời mời từ ' + (invite.owner_name || invite.owner_id) + '...', 'success');
+            await resApi(LD.respond, { accept: true, owner_id: invite.owner_id }, { headers: { 'X-Ld-Token': ldToken } });
+            showTempAlert('Đã chấp nhận! Chờ chủ lò khai lò...', 'success');
+        } else if (d.dong_serving && d.dong_serving.owner_id) {
+            showTempAlert('Đang làm đan đồng cho ' + d.dong_serving.owner_name + ', chờ lò...', 'success');
+        } else {
+            throw new Error('Không có lời mời nào và chưa là đan đồng của ai');
+        }
+
+        saveTaskData('luyenDan', { role: 'dong' });
+
+        // Poll chờ chủ lò khai lò (tối đa 10 phút)
+        craft = null;
+        for (var i = 0; i < 120; i++) {
+            await new Promise(function (r) { setTimeout(r, 5000); });
+            state = await getLdState(ldToken);
+            _ldInfoCache = getLdInfoFromStateData(state);
+            craft = state.data && state.data.craft;
+            if (craft && craft.status === 'crafting') break;
+        }
+
+        if (!craft || craft.status !== 'crafting') {
+            throw new Error('Chủ lò chưa khai lò sau 10 phút');
+        }
+
+        showTempAlert('Lò đã bắt đầu! Vào tune loop...', 'success');
+
+        _ldState = {
+            status: 'crafting',
+            role: 'dong',
+            stabilityPct: craft.stability_pct,
+            finishAt: craft.finish_at_ts,
+            tuneCount: craft.tune_count,
+            tuneSlotsLeft: craft.tune_huan_slots_left,
+            unstableLeft: craft.unstable_left_sec,
+            tier: craft.ui_tier,
+        };
+
+        await runLdTuneLoop(ldToken);
+    }
+
+    //Rời lò 
+    async function danh_luyen_dan_leave_api() {
+        var ldToken = await getLdToken();
+        var ownerId = _ldInfoCache && _ldInfoCache.dongServingOwnerId;
+        if (!ownerId) {
+            var state = await getLdState(ldToken);
+            _ldInfoCache = getLdInfoFromStateData(state);
+            ownerId = _ldInfoCache && _ldInfoCache.dongServingOwnerId;
+        }
+        if (!ownerId) throw new Error('Không lấy được owner_id để leave');
+        await resApi(LD.leave, { owner_id: ownerId }, { headers: { 'X-Ld-Token': ldToken } });
+        showTempAlert('Đã rời lò!', 'success');
+        _ldState = null;
+        _ldInfoCache = null;
+        saveTaskData('luyenDan', { role: null });
+    }
+
+
+    // ── TUNE LOOP (chỉ đan đồng) ─────────────────────────────
+    async function runLdTuneLoop(ldToken) {
+        // Giai đoạn 1: tune trong unstable phase
+        while (true) {
+            var state = await getLdState(ldToken);
+            var craft = state.data && state.data.craft;
+
+
+            if (!craft || craft.status !== 'crafting') {
+                showTempAlert('Luyện đan đã kết thúc.', 'success');
+                _ldState = null;
+                saveTaskData('luyenDan', { role: null });
+                return;
+            }
+
+            _ldState = {
+                status: 'crafting',
+                role: 'dong',
+                stabilityPct: craft.stability_pct,
+                finishAt: craft.finish_at_ts,
+                tuneCount: craft.tune_count,
+                tuneSlotsLeft: craft.tune_huan_slots_left,
+                unstableLeft: craft.unstable_left_sec,
+                tier: craft.ui_tier,
+            };
+            _ldInfoCache = getLdInfoFromStateData(state);
+            renderLdInfo();
+            updateButtonStates();
+
+            // Hết unstable phase → thoát loop
+            if (craft.unstable_left_sec <= 0) {
+                showTempAlert('Hết giai đoạn unstable. Chờ 5 phút rồi leave...', 'success');
+                danh_luyen_dan_leave_api(); // tự động leave sau khi hết unstable
+                break;
+            }
+
+            // Tune nếu đủ điều kiện
+            if (craft.tune_huan_slots_left > 0
+                && craft.tune_cooldown_left_sec <= 0
+                && craft.stability_pct <= craft.tune_effective_max_pct) {
+                try {
+                    await resApi(LD.tune, {}, { headers: { 'X-Ld-Token': ldToken } });
+                    var tasks = getDailyTasks();
+                    var used = Math.min((tasks.luyenDan.danHuanUsed || 0) + 3, 27);
+                    saveTaskData('luyenDan', { danHuanUsed: used });
+                    showTempAlert('Đã tune! Stability: ' + craft.stability_pct + '% — Đan Huân: ' + used + '/27', 'success');
+                    if (_ldState.tuneCount + 1 >= 3) {
+                        showTempAlert('Đã tune đủ ' + tuneSuccessCount + ' lần! Chờ 5 phút rồi leave...', 'success');
+                        _ldState.tuneCount = 3;
+                        break;
+                    }
+                } catch (e) {
+                    showTempAlert('Tune thất bại: ' + e.message, 'error');
+                }
+            }
+
+            await new Promise(function (r) { setTimeout(r, 10000); });
+        }
+
+        // Giai đoạn 2: chờ (unstable_left_sec + 15s), check mỗi 30s —
+        // chỉ gọi state server 1 lần, sau đó dùng cache local để đếm ngược + check leave
+        var finalState = await getLdState(ldToken);
+        var finalCraft = finalState.data && finalState.data.craft;
+        var unstableLeft = finalCraft ? (finalCraft.unstable_left_sec || 0) : 0;
+
+        _ldState = Object.assign({}, _ldState, {
+            unstableLeft: unstableLeft,
+            stabilityPct: finalCraft ? finalCraft.stability_pct : _ldState.stabilityPct,
+        });
+        _ldInfoCache = getLdInfoFromStateData(finalState);
+        renderLdInfo();
+        updateTimerDisplay();
+
+        var waitLeft = unstableLeft + 15; // tổng thời gian chờ trước khi leave
+        while (waitLeft > 0) {
+            var step = Math.min(30, waitLeft);
+            await new Promise(function (r) { setTimeout(r, step * 1000); });
+            waitLeft -= step;
+            unstableLeft = Math.max(0, unstableLeft - step);
+            _ldState = Object.assign({}, _ldState, { unstableLeft: unstableLeft });
+            updateTimerDisplay();
+        }
+
+        await danh_luyen_dan_leave_api();
+        _ldState = null;
+        _ldInfoCache = null;
+        saveTaskData('luyenDan', { role: null });
+    }
+
+    // ── THU ĐAN (chủ lò) ─────────────────────────────────────
+    async function danh_luyen_dan_collect_api() {
+        var ldToken = await getLdToken();
+        var state = await getLdState(ldToken);
+        _ldInfoCache = getLdInfoFromStateData(state);
+
+        var craft = state.data && state.data.craft;
+        if (!craft || !craft.id) throw new Error('Không có đan đang luyện để thu');
+
+        var res = await resApi(LD.collect, { job_id: craft.id }, { headers: { 'X-Ld-Token': ldToken } });
+        showTempAlert(res.message || 'Thu đan thành công!', 'success');
+
+        saveTaskData('luyenDan', { dangCo: false, finishAtTs: null, role: null });
+        _ldState = null;
+        _ldInfoCache = null;
+    }
+
+    // ── PHÂN GIẢI ────────────────────────────────────────────
+    async function danh_luyen_dan_decompose_api(pillId) {
+        var ldToken = await getLdToken();
+        var res = await resApi(LD.decompose, { pill_id: pillId }, { headers: { 'X-Ld-Token': ldToken } });
+        showTempAlert(res.message || 'Phân giải thành công!', 'success');
+        loadLdPillSelect();
+    }
+
+    // ── LOAD PILL SELECT ──────────────────────────────────────
+    async function loadLdPillSelect() {
+        var select = document.getElementById('ld-pill-select');
+        if (!select) return;
+
+        // Nếu đã có cache thì dùng luôn
+        if (_ldInfoCache && _ldInfoCache.pillStacks) {
+            renderLdPillSelect(_ldInfoCache.pillStacks);
+            return;
+        }
+
+        // Chưa có cache → gọi API
+        var ldToken = await getLdToken();
+        var state = await getLdState(ldToken);
+        _ldInfoCache = getLdInfoFromStateData(state);
+        renderLdPillSelect(_ldInfoCache.pillStacks || []);
+    }
+
+    function renderLdPillSelect(stacks) {
+        var select = document.getElementById('ld-pill-select');
+        if (!select) return;
+        var tierLabel = { ha: 'Hạ Phẩm', trung: 'Trung Phẩm', thuong: 'Thượng Phẩm', cuc: 'Cực Phẩm' };
+        var starLabel = { 1: '1 sao', 2: '2 sao', 3: '3 sao', 4: '4 sao' };
+        select.innerHTML = '<option value="">-- Chọn đan phân giải --</option>';
+        if (!stacks.length) {
+            select.innerHTML += '<option disabled>Không có đan nào</option>';
+            return;
+        }
+        stacks.forEach(function (stack) {
+            var opt = document.createElement('option');
+            opt.value = stack.stack_id;
+            opt.textContent = (tierLabel[stack.tier] || stack.tier)
+                + ' ' + (starLabel[stack.stars] || stack.stars + '★')
+                + ' ×' + stack.count;
+            select.appendChild(opt);
+        });
+    }
+
+    // ── LOAD FRIEND SELECT ────────────────────────────────────
+    var _ldFriendsCache = null;
+
+    async function loadLdFriendSelect() {
+        var select = document.getElementById('ld-friend-select');
+        if (!select) return;
+        if (_ldFriendsCache) { renderLdFriendSelect(_ldFriendsCache); return; }
+        var ldToken = await getLdToken();
+        var res = await fetch('https://hoathinh3d.co/wp-json/' + LD.friends, {
+            method: 'GET',
+            headers: { 'X-WP-Nonce': hh3dData.restNonce, 'X-Ld-Token': ldToken },
+            credentials: 'include',
+        });
+        var data = await res.json();
+        if (!data.ok) throw new Error(data.message || 'Lỗi lấy danh sách bạn bè');
+        _ldFriendsCache = (data.data && data.data.friends) || [];
+        renderLdFriendSelect(_ldFriendsCache);
+    }
+
+    function renderLdFriendSelect(friends) {
+        var select = document.getElementById('ld-friend-select');
+        if (!select) return;
+        select.innerHTML = '<option value="">-- Chọn đan đồng --</option>';
+        if (!friends.length) {
+            select.innerHTML += '<option disabled>Không có bạn bè nào</option>';
+            return;
+        }
+        friends.forEach(function (f) {
+            var opt = document.createElement('option');
+            opt.value = f.userId;
+            opt.textContent = f.name + ' (#' + f.userId + ')';
+            select.appendChild(opt);
+        });
+    }
+
+
     //Hàm đánh thí luyện
     async function danh_thi_luyen_api() {
         var tasks = getDailyTasks();
@@ -391,6 +1389,7 @@
         // Có thưởng chưa nhận → nhận trước
         if (status.has_pending_reward) {
             var claim = await resApi('tong-mon/v1/claim-boss-reward', {}, { ignoreSuccess: true });
+            if (claim.success) saveTaskData('bicanh', { remainingTurn: 5, done: true, nextTime: null });
             showTempAlert(claim.message || 'Đã nhận thưởng bí cảnh', 'success');
         }
 
@@ -426,7 +1425,7 @@
             updateButtonStates();
         } else {
             var attackCooldown = await resApi('tong-mon/v1/check-attack-cooldown');
-            var nextTimeMs = Date.now() + (attackCooldown.cooldown_remaining * 1000);
+            var nextTimeMs = Date.now() + (attackCooldown.cooldown_remaining * 1000) + 30000;
             saveTaskData('bicanh', {
                 remainingTurn: bossAttack.attack_info.remaining,
                 nextTime: nextTimeMs
@@ -557,7 +1556,7 @@
         });
 
         var rooms_not_blessed = listWedding.data.filter(function (room) {
-            return room.has_blessed === false && room.has_sent_li_xi === false;
+            return room.has_blessed === false;
         });
 
         //Xử lý nhận lì xì
@@ -567,6 +1566,7 @@
                 var room = rooms_has_lixi[i];
                 try {
                     var res = await resApi('hh3d_receive_li_xi', { wedding_room_id: room.wedding_room_id });
+                    showTempAlert(res.message + " khi gửi chúc phúc" || 'Đã nhận lì xì', 'success');
                 }
                 catch (e) {
                     showTempAlert(e.message || 'Nhận lì xì thất bại', 'error');
@@ -615,12 +1615,14 @@
         var vandapData = await ajax(hh3dData.act.vdLoad);
         var questions = vandapData.data.questions;
 
+        // ✅ Tạo một lần bên ngoài vòng lặp
+        var normalizedMap = {};
+        Object.keys(answerMap).forEach(key => {
+            normalizedMap[normalizeText(key)] = answerMap[key];
+        });
+
         for (var i = 0; i < questions.length; i++) {
             var q = questions[i];
-            var normalizedMap = {};
-            Object.keys(answerMap).forEach(key => {
-                normalizedMap[normalizeText(key)] = answerMap[key];
-            });
             var answer = normalizedMap[normalizeText(q.question)];
             var answerIndex;
 
@@ -628,7 +1630,8 @@
                 showTempAlert(`Không tìm thấy đáp án: ${q.question}`, 'error');
                 answerIndex = await showManualPicker(q.question, q.options);
             } else {
-                answerIndex = q.options.findIndex(opt => opt === answer);
+                // ✅ normalize cả option lẫn answer khi so sánh
+                answerIndex = q.options.findIndex(opt => normalizeText(opt) === normalizeText(answer));
                 if (answerIndex === -1) {
                     showTempAlert(`Đáp án không khớp: ${answer}`, 'error');
                     answerIndex = await showManualPicker(q.question, q.options);
@@ -642,7 +1645,6 @@
 
             showTempAlert(result.data?.message || `Câu ${i + 1}/${questions.length} đã trả lời`, 'success');
 
-            // Chờ 3 giây trước câu tiếp theo (trừ câu cuối)
             if (i < questions.length - 1) {
                 await new Promise(resolve => setTimeout(resolve, 3000));
             }
@@ -714,108 +1716,115 @@
 
     //Hàm đánh đồ thạch
     async function danh_do_thach_api() {
-        let tasks = getDailyTasks();
         const hour = new Date().getHours();
 
-        // Xác định lượt theo giờ
-        const isTurn1Time = hour >= 6 && hour < 13;
-        const isTurn2Time = hour >= 16 && hour < 21;
-
-        if (!isTurn1Time && !isTurn2Time) {
-            throw new Error('Không phải thời gian đặt cược (6h-13h hoặc 18h-21h)');
+        // [00-06] Dọn trạng thái lượt của ngày hôm trước trước khi ngày mới bắt đầu
+        if (hour < 6) {
+            await nhan_thuong_do_thach({ silent: true });
+            return;
         }
 
-        const turn = isTurn1Time ? 1 : 2;
+        // [06-13] Lượt 1: nhận thưởng tồn đọng (nếu có) rồi đặt cược
+        if (hour < 13) {
+            // Nhận thưởng lượt trước nếu còn, không thông báo nếu không trúng
+            await nhan_thuong_do_thach({ silent: true });
 
-        // Nếu đang ở lượt 2, kiểm tra thưởng lượt 1 đã nhận chưa
-        if (turn == 2) {
-            const dothachCheck = await ajax(hh3dData.act.dtLoad);
-            const hasUnclaimedReward =
-                dothachCheck.data.winning_stone_id &&
-                (tasks.dothach.stoneBetted1 == dothachCheck.data.winning_stone_id ||
-                    tasks.dothach.stoneBetted2 == dothachCheck.data.winning_stone_id);
-
-            if (hasUnclaimedReward) {
-                try {
-                    await nhan_thuong_do_thach();
-                } catch (err) {
-                    showTempAlert(err.message, 'error');
-                }
-                tasks = getDailyTasks();
+            // Nếu đã đặt lượt 1 rồi thì dừng, chờ kết quả lúc 13h
+            const tasks = getDailyTasks();
+            if (tasks.dothach.betplaced) {
+                throw new Error('Đã đặt cược lượt 1 hôm nay');
             }
 
-            // Reset để chuẩn bị đặt lượt 2
-            saveTaskData('dothach', { betplaced: false, turn: 2, stoneBetted1: null, stoneBetted2: null });
-            tasks = getDailyTasks();
-        } else {
-            var claimReward = await ajax(hh3dData.act.dtClaim, {}, { ignoreSuccess: true })
-            showTempAlert(claimReward.success ? 'Đã nhận thưởng ngày hôm qua' : claimReward.data?.message || claimReward.message, claimReward.success ? 'success' : 'error' || claimReward.data)
-        }
+            // Lấy danh sách đá, ưu tiên 2 viên có reward_multiplier cao nhất
+            const dothachData = await ajax(hh3dData.act.dtLoad);
+            const stones = [...dothachData.data.stones]
+                .sort((a, b) => b.reward_multiplier - a.reward_multiplier)
+                .slice(0, 2);
 
-        if (tasks.dothach.betplaced == true && tasks.dothach.turn == turn) {
-            throw new Error(`Đã đặt cược lượt ${turn} hôm nay`);
-        }
-
-        const dothachData = await ajax(hh3dData.act.dtLoad);
-
-        if (dothachData.data.bet_limit_reached || dothachData.data.is_reward_time) {
-            throw new Error('Không thể đặt cược lúc này');
-        }
-
-        const stones = dothachData.data.stones;
-        stones.sort((a, b) => b.reward_multiplier - a.reward_multiplier);
-        const top2Stones = stones.slice(0, 2);
-
-        for (const stone of top2Stones) {
-            var betData = await ajax(hh3dData.act.dtBet, {
-                stone_id: stone.stone_id,
-                bet_amount: 20
-            });
-
-            showTempAlert(betData.data.message, 'success');
-
-            tasks = getDailyTasks();
-            if (tasks.dothach.stoneBetted1 == null) {
-                saveTaskData('dothach', { betplaced: true, turn: turn, stoneBetted1: stone.stone_id });
-            } else {
-                saveTaskData('dothach', { betplaced: true, turn: turn, stoneBetted2: stone.stone_id });
+            for (const stone of stones) {
+                const betData = await ajax(hh3dData.act.dtBet, { stone_id: stone.stone_id, bet_amount: 20 });
+                showTempAlert(betData.data.message, 'success');
+                // Lưu lần lượt stoneBetted1 rồi stoneBetted2
+                const t = getDailyTasks();
+                saveTaskData('dothach', t.dothach.stoneBetted1 == null
+                    ? { betplaced: true, turn: 1, stoneBetted1: stone.stone_id }
+                    : { betplaced: true, turn: 1, stoneBetted2: stone.stone_id }
+                );
+                updateButtonStates();
             }
+            return;
+        }
+
+        // [13-16] Giữa 2 lượt: nhận thưởng lượt 1 (thông báo nếu không trúng), reset chuẩn bị lượt 2
+        if (hour < 16) {
+            // Chỉ gọi nhận thưởng nếu thực sự đã đặt lượt 1
+            const tasks = getDailyTasks();
+            if (tasks.dothach.betplaced && tasks.dothach.turn === 1) {
+                await nhan_thuong_do_thach({ silent: false });
+            }
+            // Reset sạch, đánh dấu sẵn sàng cho lượt 2
+            saveTaskData('dothach', { betplaced: false, stoneBetted1: null, stoneBetted2: null, turn: 2 });
             updateButtonStates();
+            showTempAlert('Đã sẵn sàng cho lượt 2 (16h-21h)', 'success');
+            return;
         }
+
+        // [16-21] Lượt 2: nhận thưởng tồn đọng (nếu có) rồi đặt cược
+        if (hour < 21) {
+            // Nhận thưởng lượt 1 hoặc lượt 2 ngày hôm trước nếu còn sót, không thông báo nếu không trúng
+            await nhan_thuong_do_thach({ silent: true });
+            // Đảm bảo turn = 2 dù trước đó có quên đặt lượt 1 hay không
+            saveTaskData('dothach', { turn: 2 });
+
+            // Lấy danh sách đá, ưu tiên 2 viên có reward_multiplier cao nhất
+            const dothachData = await ajax(hh3dData.act.dtLoad);
+            const stones = [...dothachData.data.stones]
+                .sort((a, b) => b.reward_multiplier - a.reward_multiplier)
+                .slice(0, 2);
+
+            for (const stone of stones) {
+                const betData = await ajax(hh3dData.act.dtBet, { stone_id: stone.stone_id, bet_amount: 20 });
+                showTempAlert(betData.data.message, 'success');
+                // Lưu lần lượt stoneBetted1 rồi stoneBetted2
+                const t = getDailyTasks();
+                saveTaskData('dothach', t.dothach.stoneBetted1 == null
+                    ? { betplaced: true, turn: 2, stoneBetted1: stone.stone_id }
+                    : { betplaced: true, turn: 2, stoneBetted2: stone.stone_id }
+                );
+                updateButtonStates();
+            }
+            return;
+        }
+
+        // [21-00] Nhận thưởng lượt 2, thông báo nếu không trúng
+        await nhan_thuong_do_thach({ silent: false });
     }
 
-    async function nhan_thuong_do_thach() {
-        let tasks = getDailyTasks();
-        const hour = new Date().getHours();
+    async function nhan_thuong_do_thach({ silent = false } = {}) {
+        // Thử nhận thưởng, server tự kiểm tra điều kiện
+        const claim = await ajax(hh3dData.act.dtClaim, {}, { ignoreSuccess: true });
+
+        if (claim.success) {
+            saveTaskData('dothach', { betplaced: false, stoneBetted1: null, stoneBetted2: null });
+            showTempAlert('Đã nhận thưởng', 'success');
+            updateButtonStates();
+            return;
+        }
+
+        // Nhận thưởng thất bại: kiểm tra xem có đặt đúng viên thắng không
+        const tasks = getDailyTasks();
         const dothachData = await ajax(hh3dData.act.dtLoad);
         const winningId = dothachData.data.winning_stone_id;
+        const didBetWinner = tasks.dothach.stoneBetted1 == winningId || tasks.dothach.stoneBetted2 == winningId;
 
-        if (!winningId) {
-            throw new Error('Chưa có kết quả hoặc không phải thời gian nhận thưởng');
-        }
+        // Reset trạng thái bất kể kết quả
+        saveTaskData('dothach', { betplaced: false, stoneBetted1: null, stoneBetted2: null });
+        updateButtonStates();
 
-        const didBetWinner =
-            tasks.dothach.stoneBetted1 == winningId ||
-            tasks.dothach.stoneBetted2 == winningId;
-
-        if (!didBetWinner) {
-            // Không trúng nhưng vẫn reset để đặt lượt tiếp
-            saveTaskData('dothach', { betplaced: false, stoneBetted1: null, stoneBetted2: null });
-            updateButtonStates();
+        // Chỉ thông báo không trúng ở các khung giờ nhận thưởng chính thức (13-16, 21-00)
+        if (!didBetWinner && !silent) {
             throw new Error('Không trúng thưởng lượt này');
         }
-
-        const claim = await ajax(hh3dData.act.dtClaim, { stone_id: winningId });
-
-        // Reset sau khi nhận thưởng, giữ lại turn để biết vừa xong lượt mấy
-        saveTaskData('dothach', {
-            betplaced: false,
-            stoneBetted1: null,
-            stoneBetted2: null
-        });
-
-        showTempAlert(claim.data.message, 'success');
-        updateButtonStates();
     }
 
     //Hàm nhận thưởng hoạt động ngày
@@ -872,12 +1881,16 @@
         var btn3 = document.getElementById('btn-diemdanh-vandap-tele');
         if (btn3) {
             var allDone = tasks.diemdanh?.done && tasks.tele?.done && tasks.vandap?.done;
-            var originalText = btn3.getAttribute('data-label') || btn3.textContent.trim();
-            btn3.setAttribute('data-label', originalText);
+
+            if (!btn3.hasAttribute('data-original-html')) {
+                btn3.setAttribute('data-original-html', btn3.innerHTML.trim());
+            }
+            var originalHtml = btn3.getAttribute('data-original-html');
+
             btn3.disabled = allDone;
             btn3.innerHTML = allDone
-                ? originalText + ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>'
-                : originalText;
+                ? originalHtml + ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>'
+                : originalHtml;
         }
 
         // Các button thường
@@ -887,12 +1900,16 @@
             if (btn) {
                 var t = tasks[key] || {};
                 var isDone = t.done === true;
-                var originalText = btn.getAttribute('data-label') || btn.textContent.trim();
-                btn.setAttribute('data-label', originalText);
+
+                if (!btn.hasAttribute('data-original-html')) {
+                    btn.setAttribute('data-original-html', btn.innerHTML.trim());
+                }
+                var originalHtml = btn.getAttribute('data-original-html');
+
                 btn.disabled = isDone;
                 btn.innerHTML = isDone
-                    ? originalText + ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>'
-                    : originalText;
+                    ? originalHtml + ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>'
+                    : originalHtml;
             }
         });
 
@@ -901,6 +1918,7 @@
             {
                 key: 'hoangvuc',
                 label: 'Hoang Vực',
+                icon: 'fa-solid fa-dragon',
                 getProgress: function (t) {
                     var done = 5 - (t.remainingTurn ?? 5);
                     return { done, max: 5 };
@@ -909,6 +1927,7 @@
             {
                 key: 'thiluyen',
                 label: 'Thí Luyện',
+                icon: 'fa-solid fa-shield-halved',
                 getProgress: function (t) {
                     return { done: t.currentStage ?? 0, max: 3 };
                 }
@@ -916,6 +1935,7 @@
             {
                 key: 'phucloi',
                 label: 'Phúc Lợi',
+                icon: 'fa-solid fa-gift',
                 getProgress: function (t) {
                     return { done: (t.currentChest ?? 1) - 1, max: 4 };
                 }
@@ -923,6 +1943,7 @@
             {
                 key: 'bicanh',
                 label: 'Bí Cảnh',
+                icon: 'fa-solid fa-map',
                 getProgress: function (t) {
                     var remaining = t.remainingTurn ?? 5;
                     return { done: 5 - remaining, max: 5 };
@@ -931,6 +1952,7 @@
             {
                 key: 'khoangmach',
                 label: 'Khoáng Mạch',
+                icon: 'fa-solid fa-gem',
                 getProgress: function (t) {
                     return { done: t.tuvi_current ?? 0, max: t.tuvi_max ?? 1 };
                 }
@@ -947,8 +1969,70 @@
             var pct = Math.min(100, Math.round((p.done / p.max) * 100));
 
             btn.disabled = isDone;
-            btn.innerHTML = `<div class="btn-progress" style="width:${pct}%"></div><span class="btn-label">${item.label}${isDone ? ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>' : ''}</span>`;
+            btn.innerHTML = `<div class="btn-progress" style="width:${pct}%"></div><span class="btn-label"><i class="${item.icon}"></i> ${item.label}${isDone ? ' <i class="fa-solid fa-circle-check" style="color: #979696;"></i>' : ''}</span>`;
         });
+
+        // Button Mê Cung
+        var btnMecung = document.getElementById('btn-mecung');
+        if (btnMecung) {
+            if (!btnMecung.hasAttribute('data-original-html')) {
+                btnMecung.setAttribute('data-original-html', btnMecung.innerHTML.trim());
+            }
+            var originalHtml = btnMecung.getAttribute('data-original-html');
+
+            var mc = tasks.mecung || { huyen_tinh_daily_total: 0, huyen_tinh_daily_cap: 200 };
+            var current = mc.huyen_tinh_daily_total ?? 0;
+            var max = mc.huyen_tinh_daily_cap ?? 200;
+
+            btnMecung.innerHTML = originalHtml.replace(
+                '<span>Mê Cung</span>',
+                `<span>Mê Cung (${current}/${max})</span>`
+            );
+            if (current >= max) {
+                btnMecung.classList.add('mc-full');
+            } else {
+                btnMecung.classList.remove('mc-full');
+            }
+        }
+
+        // Luyện Đan - render info box
+        renderLdInfo();
+
+        // Button Thu Đan (Luyện Đan)
+        var btnLdCollect = document.getElementById('btn-ld-collect');
+        if (btnLdCollect) {
+            if (_ldState && _ldState.finishAt) {
+                var now = Math.floor(Date.now() / 1000);
+                btnLdCollect.disabled = now < _ldState.finishAt;
+            } else {
+                var ld = tasks.luyenDan;
+                if (ld && ld.dangCo && ld.finishAtTs) {
+                    var now = Math.floor(Date.now() / 1000);
+                    btnLdCollect.disabled = now < ld.finishAtTs;
+                } else {
+                    btnLdCollect.disabled = true;
+                }
+            }
+        }
+
+        // Button Rời Lò (Luyện Đan - chỉ đan đồng sau 5 phút)
+        var btnLdLeave = document.getElementById('btn-ld-leave');
+        if (btnLdLeave) {
+            var craft = _ldInfoCache && _ldInfoCache.craft;
+            var isDong = _ldInfoCache && !!_ldInfoCache.dongServingOwnerName;
+
+            var canLeave = false;
+            if (isDong && craft) {
+                if (craft.status === 'ready') {
+                    canLeave = true; // lò đã xong, đan đồng có thể rời bất cứ lúc nào
+                } else if (craft.status === 'crafting'
+                    && craft.duration_sec !== undefined && craft.timer_left_sec !== undefined) {
+                    var elapsed = craft.duration_sec - craft.timer_left_sec;
+                    if (elapsed >= 5 * 60) canLeave = true;
+                }
+            }
+            btnLdLeave.disabled = !canLeave;
+        }
     }
 
     //Tạo nút menu
@@ -1041,7 +2125,6 @@
     function createControlPanel() {
         if (document.getElementById('auto-control-panel')) return;
 
-        // Tìm wrapper qua nút open-auto-menu thay vì querySelector
         var menuBtn = document.getElementById('open-auto-menu');
         if (!menuBtn) return;
         var wrapper = menuBtn.closest('.load-notification');
@@ -1050,84 +2133,155 @@
         var panel = document.createElement('div');
         panel.id = 'auto-control-panel';
         panel.innerHTML = `
-       <div class="panel-header">
-            <span>Auto Menu</span>
-            <span class="panel-version">${SCRIPT_VERSION}</span>
-       </div>
-        <div class="panel-body">
+   <div class="panel-header">
+        <span>Auto Menu</span>
+        <span class="panel-version">${SCRIPT_VERSION}</span>
+   </div>
+    <div class="panel-body">
 
-            <!-- Hàng 1: 1 lần/ngày -->
-            <div class="panel-row">
-                <button id="btn-diemdanh-vandap-tele" class="panel-btn panel-btn-full">Điểm Danh - Tế lễ - Vấn
-                    đáp</button>
-                <button id="btn-auto-toggle" class="panel-btn btn-auto-toggle"></button>
-                <button id="btn-setting" class="panel-btn btn-auto-toggle"><i class="fa-solid fa-gear"></i></button>
-            </div>
-
-            <!-- Hàng 2 -->
-            <div class="panel-row">
-                <button id="btn-hoangvuc" class="panel-btn">Hoàng Vực</button>
-                <button id="btn-thiluyen" class="panel-btn">Thí Luyện</button>
-            </div>
-
-            <!-- Hàng 3 -->
-            <div class="panel-row">
-                <button id="btn-phucloi" class="panel-btn">Phúc Lợi</button>
-                <button id="btn-bicanh" class="panel-btn">Bí Cảnh</button>
-            </div>
-
-            <!-- Khoáng Mạch full width -->
-            <button id="btn-khoangmach" class="panel-btn panel-btn-full">Khoáng Mạch</button>
-
-            <!-- Tiên Duyên full width -->
-            <div class="panel-row">
-                <button id="btn-tienduyen" class="panel-btn">Tiên Duyên</button>
-                <button id="btn-chucphuc" class="panel-btn">Chúc Phúc</button>
-            </div>
-
-            <!-- Đồ Thạch -->
-            <button id="btn-dothach" class="panel-btn panel-btn-full">Đồ Thạch</button>
-
-            <!-- Link -->
-            <button id="btn-banghoatdong" class="panel-btn panel-btn-full" onclick="window.open('https://hoathinh3d.co/nhiem-vu-hang-ngay', '_blank')">Bảng hoạt động ngày</button>
-
-            <!-- Timer -->
-            <div id="timer-display">
-                <div class="timer-row">
-                    <span>Hoàng Vực</span>
-                    <span style="color:#4ade80;">Ready</span>
-                </div>
-                <div class="timer-row">
-                    <span>Phúc Lợi</span>
-                    <span>12p 30s</span>
-                </div>
-            </div>
-            <div id="settings-panel" class="settings-panel hidden"></div>
+        <div class="panel-row">
+            <button id="btn-diemdanh-vandap-tele" class="panel-btn panel-btn-full">
+                <i class="fa-solid fa-calendar-check"></i> Điểm Danh - Tế lễ - Vấn đáp
+            </button>
+            <button id="btn-auto-toggle" class="panel-btn btn-auto-toggle"></button>
+            <button id="btn-setting" class="panel-btn btn-auto-toggle"><i class="fa-solid fa-gear"></i></button>
         </div>
-    `;
+
+        <div class="panel-row">
+            <button id="btn-hoangvuc" class="panel-btn"><i class="fa-solid fa-dragon"></i> Hoàng Vực</button>
+            <button id="btn-thiluyen" class="panel-btn"><i class="fa-solid fa-shield-halved"></i> Thí Luyện</button>
+        </div>
+
+        <div class="panel-row">
+            <button id="btn-phucloi" class="panel-btn"><i class="fa-solid fa-gift"></i> Phúc Lợi</button>
+            <button id="btn-bicanh" class="panel-btn"><i class="fa-solid fa-map"></i> Bí Cảnh</button>
+        </div>
+            <!-- Mê Cung -->
+        <div id="mecung-wrapper" class="expandable-wrapper">
+            <button id="btn-mecung" class="panel-btn panel-btn-full expandable-btn">
+                <i class="fa-solid fa-dungeon"></i>
+                <span>Mê Cung</span>
+                <i class="fa-solid fa-chevron-down expandable-chevron"></i>
+            </button>
+            <div id="mecung-input-row" class="expandable-dropdown hidden">
+                <input id="mecung-invite-input" type="text" placeholder="Nhập link hoặc token mời..." />
+                <button id="btn-mecung-start" class="panel-btn btn-auto-toggle">
+                    <i class="fa-solid fa-play"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Luyện Đan -->
+        <div id="luyen-dan-wrapper" class="expandable-wrapper">
+            <button id="btn-luyen-dan" class="panel-btn panel-btn-full expandable-btn">
+                <i class="fa-solid fa-fire-flame-curved"></i>
+                <span>Luyện Đan</span>
+                <i class="fa-solid fa-chevron-down expandable-chevron"></i>
+            </button>
+            <div id="luyen-dan-dropdown" class="expandable-dropdown hidden" style="flex-direction: column; align-items: stretch;">
+
+                <!-- Thông tin đan đồng / chủ lò hiện tại -->
+                <div id="ld-info-box" class="ld-info-box">
+                    <span class="ld-info-hint">Đang tải...</span>
+                </div>
+
+                <!-- Chủ lò: chọn đan đồng + khai lò -->
+                <div class="ld-section-title"><i class="fa-solid fa-crown"></i> Chủ lò</div>
+                <div class="ld-row">
+                    <select id="ld-friend-select" class="panel-select"></select>
+                    <button id="btn-ld-invite" class="panel-btn btn-auto-toggle" title="Mời đan đồng">
+                        <i class="fa-solid fa-user-plus"></i>
+                    </button>
+                </div>
+                <div class="ld-row">
+                    <select id="ld-tier-select" class="panel-select">
+                        <option value="ha">Hạ Phẩm Đan</option>
+                        <option value="trung" disabled>Trung Phẩm Đan</option>
+                        <option value="thuong" disabled>Thượng Phẩm Đan</option>
+                        <option value="cuc" disabled>Cực Phẩm Đan</option>
+                    </select>
+                    <button id="btn-ld-start" class="panel-btn panel-btn-full" style="background: linear-gradient(135deg, #ea580c 0%, #b45309 100%); box-shadow: 0 8px 18px rgba(234, 88, 12, 0.3);">
+                <i class="fa-solid fa-fire"></i> Khai Lò
+                </button>
+                </div>
+                <button id="btn-ld-collect" class="panel-btn panel-btn-full">
+                    <i class="fa-solid fa-hand-sparkles"></i> Thu Đan
+                </button>
+
+                <!-- Đan đồng: chấp nhận + bắt đầu tune -->
+               <div class="ld-section-title"><i class="fa-solid fa-user-group"></i> Đan đồng</div>
+                <button id="btn-ld-respond" class="panel-btn panel-btn-full">
+                <i class="fa-solid fa-handshake"></i> Chấp Nhận & Chờ Tune
+            </button>
+            <button id="btn-ld-leave" class="panel-btn panel-btn-full" disabled>
+    <i class="fa-solid fa-door-open"></i> Rời Lò
+</button>
+
+                <!-- Phân giải đan -->
+                <div class="ld-section-title"><i class="fa-solid fa-scissors"></i> Phân giải</div>
+                <div class="ld-row">
+                    <select id="ld-pill-select" class="panel-select">
+                        <option value="">-- Chọn đan phân giải --</option>
+                    </select>
+                    <button id="btn-ld-decompose" class="panel-btn btn-auto-toggle" title="Phân giải đan">
+                        <i class="fa-solid fa-scissors"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <button id="btn-khoangmach" class="panel-btn panel-btn-full"><i class="fa-solid fa-gem"></i> Khoáng Mạch</button>
+
+        <div class="panel-row">
+            <button id="btn-tienduyen" class="panel-btn"><i class="fa-solid fa-heart"></i> Tiên Duyên</button>
+            <button id="btn-chucphuc" class="panel-btn"><i class="fa-solid fa-star"></i> Chúc Phúc</button>
+        </div>
+
+        <button id="btn-dothach" class="panel-btn panel-btn-full"><i class="fa-solid fa-dice-d6"></i> Đồ Thạch</button>
+
+        <button id="btn-banghoatdong" class="panel-btn panel-btn-full" onclick="window.open('https://hoathinh3d.co/nhiem-vu-hang-ngay', '_blank')">
+            <i class="fa-solid fa-list-check"></i> Bảng hoạt động ngày
+        </button>
+        <!-- Timer -->
+        <div id="timer-display">
+            <div class="timer-row">
+                <span>Hoàng Vực</span>
+                <span style="color:#4ade80;">Ready</span>
+            </div>
+            <div class="timer-row">
+                <span>Phúc Lợi</span>
+                <span>12p 30s</span>
+            </div>
+        </div>
+        <div id="settings-panel" class="settings-panel hidden"></div>
+    </div>
+`;
 
         panel.style.cssText = 'display:none;';
 
         var style = document.createElement('style');
         style.textContent = `
         #auto-control-panel {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            left: auto;
-            bottom: auto;
-            width: min(400px, calc(100vw - 20px));
-            z-index: 999999;
-            background: rgba(20, 20, 20, 0.95);
-            color: #fff;
-            border-radius: 14px;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
-            font-family: Arial, sans-serif;
-            line-height: 1.4;
-            padding: 20px;
-            padding-top: 0;
-        }
-          /* ===== HEADER ===== */
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: auto;
+    bottom: auto;
+    width: min(400px, calc(100vw - 20px));
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    z-index: 999999;
+    background: rgba(20, 20, 20, 0.95);
+    color: #fff;
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+    font-family: Arial, sans-serif;
+    line-height: 1.4;
+    padding: 20px;
+    padding-top: 0;
+}
+
+        /* ===== HEADER ===== */
         #auto-control-panel .panel-header {
             position: relative;
             display: flex;
@@ -1149,7 +2303,8 @@
             border-radius: 20px;
             padding: 2px 9px;
             letter-spacing: .04em;
-            }
+        }
+
         /* ===== BODY ===== */
         #auto-control-panel .panel-body {
             display: flex;
@@ -1168,8 +2323,8 @@
 
         /* ===== BUTTONS ===== */
         #auto-control-panel .panel-btn {
-            position:relative;
-            overflow:hidden;
+            position: relative;
+            overflow: hidden;
             width: 100%;
             margin: 0;
             padding-top: 10px;
@@ -1187,28 +2342,25 @@
             font-weight: bold;
         }
         #auto-control-panel .btn-progress {
-            position:absolute;
-            left:0;
-            top:0;
-            height:100%;
-            background:rgba(255,255,255,0.15);
-            transition:width 300ms ease;
-            z-index:0;
-            border-radius:12px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.15);
+            transition: width 300ms ease;
+            z-index: 0;
+            border-radius: 12px;
         }
         #auto-control-panel .btn-label {
-            position:relative;
-            z-index:1;
+            position: relative;
+            z-index: 1;
         }
         #auto-control-panel #btn-banghoatdong {
             background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
-  
         }
-
         #auto-control-panel #btn-banghoatdong:hover:not(:disabled) {
-        background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
+            background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
         }
-
         #auto-control-panel .panel-btn-full {
             width: 100%;
             display: block;
@@ -1226,13 +2378,101 @@
             border-radius: 5px;
             background: rgba(255, 255, 255, 0.08);
         }
-
         #auto-control-panel #btn-auto-toggle:hover:not(:disabled),
         #auto-control-panel #btn-setting:hover:not(:disabled) {
             background: rgba(255, 255, 255, 0.16);
             transform: none;
             box-shadow: none;
         }
+        #auto-control-panel .panel-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #f07373 0%, #f13e3e 100%);
+            transform: scale(1.03);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+            transition: all 0.2s ease;
+        }
+        #auto-control-panel .panel-btn:disabled {
+            background: linear-gradient(135deg, #3d3d3d 0%, #8f8f8f 100%);
+            color: #979696;
+            cursor: not-allowed;
+            opacity: 0.9;
+        }
+        #auto-control-panel .panel-btn.mc-full {
+            background: linear-gradient(135deg, #3d3d3d 0%, #8f8f8f 100%);
+            color: #979696;
+            opacity: 0.9;
+            cursor: pointer;
+        }
+        #auto-control-panel .panel-btn.done {
+            background: #16a34a;
+        }
+
+        /* ===== LUYỆN ĐAN — INFO BOX ===== */
+        #auto-control-panel .ld-info-box {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        #auto-control-panel .ld-info-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        #auto-control-panel .ld-info-label {
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        #auto-control-panel .ld-info-label i {
+            width: 14px;
+            text-align: center;
+            opacity: 0.8;
+        }
+        #auto-control-panel .ld-info-val {
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 13px;
+            text-align: right;
+        }
+        #auto-control-panel .ld-info-hint {
+            color: #64748b;
+            font-size: 13px;
+            font-style: italic;
+        }
+
+        /* ===== LUYỆN ĐAN — SECTION TITLE ===== */
+        #auto-control-panel .ld-section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #7dd3fc;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 4px 2px 2px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.85;
+        }
+
+        /* ===== LUYỆN ĐAN — DONG START BUTTON ===== */
+        #auto-control-panel .ld-dong-start-btn {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            box-shadow: 0 4px 14px rgba(34, 197, 94, 0.25);
+        }
+        #auto-control-panel .ld-dong-start-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);
+        }
+
+        /* ===== SETTINGS PANEL ===== */
         #auto-control-panel .settings-panel {
             display: none;
             padding: 10px;
@@ -1279,25 +2519,65 @@
             font-size: 14px;
         }
 
-        #auto-control-panel .panel-btn:hover:not(:disabled) {
-            background: linear-gradient(135deg, #f07373 0%, #f13e3e 100%);
-            transform: scale(1.03);
-            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
-            transition: all 0.2s ease;
+        /* ===== EXPANDABLE WRAPPER (dùng chung cho Mê Cung & Luyện Đan) ===== */
+        #auto-control-panel .expandable-wrapper {
+            border-radius: 14px;
+            border: 1px solid rgba(var(--accent-rgb), 0.3);
         }
 
-        #auto-control-panel .panel-btn:disabled {
-            background: linear-gradient(135deg, #3d3d3d 0%, #8f8f8f 100%);
-            color: #979696;
-            cursor: not-allowed;
-            opacity: 0.9;
+        #auto-control-panel .expandable-btn {
+            position: relative;
+        }       
+
+        #auto-control-panel .expandable-chevron {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            opacity: 0.6;
+            transition: transform 0.2s ease;
         }
 
-        #auto-control-panel .panel-btn.done {
-            background: #16a34a;
+        #auto-control-panel .expandable-btn.expanded .expandable-chevron {
+            transform: translateY(-50%) rotate(180deg);
+        }
+        #auto-control-panel .expandable-dropdown {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            gap: 8px;
+            border-radius: 0 0 14px 14px;
         }
 
-        
+        #auto-control-panel .expandable-dropdown.hidden { display: none; }
+        #auto-control-panel .ld-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ===== MÊ CUNG INPUT ===== */
+        #mecung-invite-input {
+            flex: 1;
+            padding: 9px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(116, 113, 126, 0.3);
+            background: rgba(255, 255, 255, 0.06);
+            color: #e2e8f0;
+            font-size: 13px;
+            outline: none;
+        }
+        #mecung-invite-input::placeholder {
+            color: rgba(255,255,255,0.3);
+            font-size: 12px;
+        }
+        #mecung-invite-input:focus {
+            border-color: rgba(209, 209, 216, 0.7);
+            background: rgba(255, 255, 255, 0.09);
+        }
+
         /* ===== SELECT ===== */
         #auto-control-panel .panel-select {
             flex: 1;
@@ -1309,7 +2589,6 @@
             font-size: 16px;
             cursor: pointer;
         }
-
 
         /* ===== LINKS ===== */
         a {
@@ -1325,17 +2604,15 @@
             font-size: 16px;
             text-align: center;
         }
-
         #auto-control-panel .timer-row {
             display: flex;
             justify-content: space-between;
             padding: 4px 0;
         }
-
         #auto-control-panel .timer-row span:first-child {
             color: #aaa;
         }
-    `;
+`;
 
         document.head.appendChild(style);
         wrapper.appendChild(panel);
@@ -1361,6 +2638,24 @@
                 showTempAlert('Auto đã tắt', 'error');
             }
         });
+
+        document.getElementById('btn-mecung').addEventListener('click', function () {
+            var row = document.getElementById('mecung-input-row');
+            row.classList.toggle('hidden');
+            this.classList.toggle('expanded');
+            if (!row.classList.contains('hidden')) {
+                document.getElementById('mecung-invite-input').focus();
+            }
+        });
+        document.getElementById('btn-mecung-start').addEventListener('click', async function () {
+            var input = document.getElementById('mecung-invite-input').value.trim();
+            document.getElementById('mecung-input-row').classList.add('hidden');
+            document.getElementById('btn-mecung').classList.remove('expanded');
+            var fn = function danh_me_cung() {
+                return danh_me_cung_api(input);
+            };
+            runTask(fn);
+        });
         document.getElementById('btn-hoangvuc').addEventListener('click', function () {
             if (!this.disabled) runTask(danh_hoang_vuc_api);
         });
@@ -1383,18 +2678,73 @@
             if (!this.disabled) runTask(danh_chuc_phuc_api);
         });
         document.getElementById('btn-dothach').addEventListener('click', function () {
-            var now = new Date();
-            var currentHour = now.getHours();
-            var tasks = getDailyTasks();
-            if (currentHour >= 6 && currentHour < 13 || currentHour >= 16 && currentHour < 21) {
-                if (!tasks.dothach.betplaced) {
-                    if (!this.disabled) runTask(danh_do_thach_api);
+            if (!this.disabled) runTask(danh_do_thach_api);
+        });
+
+        // ── Luyện Đan dropdown toggle ──────────────────────────────
+        document.getElementById('btn-luyen-dan').addEventListener('click', function () {
+            var dropdown = document.getElementById('luyen-dan-dropdown');
+            var wasHidden = dropdown.classList.contains('hidden');
+            dropdown.classList.toggle('hidden');
+            this.classList.toggle('expanded');
+
+            if (wasHidden) {
+                renderLdInfo(); // render cache ngay
+                if (!_ldInfoCache) {
+                    // Chỉ gọi API lần đầu khi chưa có cache
+                    loadLdPillSelect(); // bên trong cập nhật _ldInfoCache
                 } else {
-                    showTempAlert('Đã đặt cược rồi', 'error');
+                    loadLdPillSelect(); // chỉ load pill select, không gọi state nữa
                 }
-            } else {
-                if (!this.disabled) runTask(nhan_thuong_do_thach);
+                loadLdFriendSelect();
             }
+        });
+
+        // ── Chủ lò: mời đan đồng (chỉ mời, chưa khai lò) ─────────
+        document.getElementById('btn-ld-invite').addEventListener('click', function () {
+            var buddyId = document.getElementById('ld-friend-select').value;
+            if (!buddyId) { showTempAlert('Vui lòng chọn đan đồng', 'error'); return; }
+            var fn = function danh_ld_invite() {
+                return danh_luyen_dan_invite_api(buddyId);
+            };
+            runTask(fn);
+        });
+
+        // ── Chủ lò: khai lò (mời + đợi accept + start) ────────────
+        document.getElementById('btn-ld-start').addEventListener('click', function () {
+            var tier = document.getElementById('ld-tier-select').value;
+            var fn = function danh_luyen_dan_start() {
+                return danh_luyen_dan_start_api(tier);
+            };
+            runTask(fn);
+        });
+
+        // ── Đan đồng: chấp nhận lời mời ───────────────────────────
+        document.getElementById('btn-ld-respond').addEventListener('click', function () {
+            runTask(danh_luyen_dan_dong_api);
+        });
+
+        //Rời lò cho đan đồng
+        document.getElementById('btn-ld-leave').addEventListener('click', function () {
+            var fn = function danh_ld_leave() {
+                return danh_luyen_dan_leave_api();
+            };
+            runTask(fn);
+        });
+        // ── Chủ lò: thu đan ────────────────────────────────────────
+        document.getElementById('btn-ld-collect').addEventListener('click', function () {
+            if (this.disabled) return;
+            runTask(danh_luyen_dan_collect_api);
+        });
+
+        // ── Phân giải đan ──────────────────────────────────────────
+        document.getElementById('btn-ld-decompose').addEventListener('click', function () {
+            var pillId = document.getElementById('ld-pill-select').value;
+            if (!pillId) { showTempAlert('Chọn đan cần phân giải', 'error'); return; }
+            var fn = function danh_luyen_dan_decompose() {
+                return danh_luyen_dan_decompose_api(pillId);
+            };
+            runTask(fn);
         });
     }
 
@@ -1897,6 +3247,19 @@
                     <input type="text" class="sp-field sp-text" data-path="dothach.stoneBetted2" placeholder="—"/>
                 </div>
             </div>
+
+             <!-- Mê Cung -->
+            <div class="sp-section">
+                <div class="sp-section-title"><i class="fa-solid fa-dungeon"></i> Mê Cung</div>
+                <div class="sp-item sp-input-row">
+                    <span class="sp-label"><i class="fa-solid fa-gem"></i>Huyền Tinh Hiện Tại</span>
+                    <input type="number" min="0" class="sp-field sp-number" data-path="mecung.huyen_tinh_daily_total" placeholder="—"/>
+                </div>
+                <div class="sp-item sp-input-row">
+                    <span class="sp-label"><i class="fa-solid fa-gem"></i>Huyền Tinh Tối Đa</span>
+                    <input type="number" min="0" class="sp-field sp-number" data-path="mecung.huyen_tinh_daily_cap" placeholder="—"/>
+                </div>
+            </div>
  
         </div>
  
@@ -2186,55 +3549,131 @@
 
     //Hiển thị thời gian
     function updateTimerDisplay() {
-        var timerDisplay = document.getElementById('timer-display');
-        if (!timerDisplay) return;
+    var timerDisplay = document.getElementById('timer-display');
+    if (!timerDisplay) return;
 
-        var tasks = getDailyTasks();
-        var now = Date.now();
-        var html = '';
+    var tasks = getDailyTasks();
+    var now = Date.now();
+    var html = '';
 
-        var items = [
-            { key: 'phucloi', label: 'Phúc Lợi' },
-            { key: 'hoangvuc', label: 'Hoàng Vực' },
-            { key: 'thiluyen', label: 'Thí Luyện' },
-            { key: 'bicanh', label: 'Bí Cảnh' },
-            { key: 'khoangmach', label: 'Khoáng Mạch' },
-        ];
+    var items = [
+        { key: 'phucloi', label: 'Phúc Lợi' },
+        { key: 'hoangvuc', label: 'Hoàng Vực' },
+        { key: 'thiluyen', label: 'Thí Luyện' },
+        { key: 'bicanh', label: 'Bí Cảnh' },
+        { key: 'khoangmach', label: 'Khoáng Mạch' },
+    ];
 
-        items.forEach(function (item) {
-            var t = tasks[item.key];
-            if (!t || t.done) return;
+    items.forEach(function (item) {
+        var t = tasks[item.key];
+        if (!t || t.done) return;
 
-            var nextTime = t.nextTime;
-            if (!nextTime || now >= nextTime) {
-                html += `<div class="timer-row"><span>${item.label}</span><span style="color:#4ade80;">Ready</span></div>`;
-            } else {
-                var remaining = nextTime - now;
-                var mins = Math.floor(remaining / 60000);
-                var secs = Math.floor((remaining % 60000) / 1000);
-                html += `<div class="timer-row"><span>${item.label}</span><span>${mins}p ${secs}s</span></div>`;
-            }
-        });
-
-
-        if (runningTask) {
-            html += `<div id="running-task-row" class="timer-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;"><span>Đang chạy</span><span style="color:#fbbf24;">${runningTask}</span></div>`;
+        var nextTime = t.nextTime;
+        if (!nextTime || now >= nextTime) {
+            html += `<div class="timer-row"><span>${item.label}</span><span style="color:#4ade80;">Ready</span></div>`;
+        } else {
+            var remaining = nextTime - now;
+            var mins = Math.floor(remaining / 60000);
+            var secs = Math.floor((remaining % 60000) / 1000);
+            html += `<div class="timer-row"><span>${item.label}</span><span>${mins}p ${secs}s</span></div>`;
         }
-        timerDisplay.innerHTML = html || '<div class="timer-row">Không có task nào đang chờ</div>';
+    });
 
-        if (runningTask) {
-            setTimeout(function () {
-                var row = document.getElementById('running-task-row');
-                if (row) {
-                    row.remove();
-                    var timerEl = document.getElementById('timer-display');
-                    if (timerEl && timerEl.querySelectorAll('.timer-row').length === 0) {
-                        timerEl.remove();
-                    }
-                }
+    // Mê Cung
+    if (mazeState) {
+        var mc = mazeState;
+
+        var statusLabel = mc.status === 'battle' ? '⚔️ Đang đánh' : mc.status === 'ready' ? '✅ Sẵn sàng' : '⏳ Chờ';
+        var elColor = { kim: '#c0c0c0', moc: '#4ade80', thuy: '#38bdf8', hoa: '#f87171', tho: '#d97706' };
+        var elName = { kim: 'Kim', moc: 'Mộc', thuy: 'Thủy', hoa: 'Hỏa', tho: 'Thổ' };
+        var hpColor = mc.bossHpPct > 50 ? '#4ade80' : mc.bossHpPct > 20 ? '#fbbf24' : '#f87171';
+        var resColor = mc.lastResult === 'win' ? '#4ade80' : '#f87171';
+        var resLabel = mc.lastResult === 'win' ? '✅ Thắng' : mc.lastResult === 'lose' ? '❌ Thua' : '';
+
+        html += '<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;">';
+        html += '<div class="timer-row"><span>Mê Cung</span><span style="color:#fbbf24;">' + statusLabel + ' — Ải ' + (mc.stage || 0) + '</span></div>';
+
+        if (mc.status === 'battle' && mc.bossHpPct !== null && mc.bossHpPct !== undefined) {
+            html += '<div style="position:relative;margin:16px 0 4px;">'
+                + '<div style="height:4px;background:#2d3448;border-radius:2px;overflow:hidden;">'
+                + '<div style="width:' + mc.bossHpPct + '%;height:100%;background:' + hpColor + ';border-radius:2px;transition:width 0.8s ease-out;"></div>'
+                + '</div>'
+                + '<div style="position:absolute; top:-20px;left:' + Math.min(mc.bossHpPct, 90) + '%;transform:translateX(-50%);font-size:14px;color:' + hpColor + ';white-space:nowrap;transition:left 0.8s ease-out;">' + mc.bossHpPct + '%</div>'
+                + '</div>';
+            html += '<div class="timer-row"; style="margin-top:6px";>'
+                + '<span style="color:' + (elColor[mc.bossElement] || '#fff') + ';">' + (elName[mc.bossElement] || mc.bossElement || '?') + '</span>'
+                + (resLabel ? '<span style="color:' + resColor + ';">' + resLabel + '</span>' : '')
+                + '</div>';
+        } else if (resLabel) {
+            html += '<div class="timer-row"><span style="color:#aaa;">Vòng trước</span><span style="color:' + resColor + ';">' + resLabel + '</span></div>';
+        }
+
+        html += '</div>';
+    }
+
+    // Luyện Đan           
+    if (_ldState) {
+        var ld = _ldState;
+        var tierLabel = { ha: 'Hạ Phẩm', trung: 'Trung Phẩm', thuong: 'Thượng Phẩm', cuc: 'Cực Phẩm' };
+        var tasks2 = getDailyTasks();
+        var danHuanUsed = tasks2.luyenDan ? (tasks2.luyenDan.danHuanUsed || 0) : 0;
+        var isDong = ld.role === 'dong';
+
+        var roleText = isDong
+            ? ('⚗️ ' + (_ldInfoCache && _ldInfoCache.dongServingOwnerName ? _ldInfoCache.dongServingOwnerName : ''))
+            : ('🤝 ' + (_ldInfoCache && _ldInfoCache.buddyNames && _ldInfoCache.buddyNames.length
+                ? _ldInfoCache.buddyNames.join(', ')
+                : ''));
+
+        html += '<div style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;">';
+        if (roleText.trim() !== '⚗️' && roleText.trim() !== '🤝') {
+    html += '<div class="timer-row"><span>Luyện Đan</span><span style="color:#d97706;">' + roleText + '</span></div>';
+}
+
+        if (ld.tier) {
+            html += '<div class="timer-row"><span>Phẩm</span><span>' + (tierLabel[ld.tier] || ld.tier) + '</span></div>';
+        }
+
+        if (isDong && ld.stabilityPct !== undefined) {
+            var bandColor = ld.stabilityPct > 68 ? '#4ade80' : ld.stabilityPct > 40 ? '#fbbf24' : '#f87171';
+            html += '<div class="timer-row"><span>Ổn định</span><span style="color:' + bandColor + ';">' + ld.stabilityPct.toFixed(1) + '%</span></div>';
+            if (ld.tuneCount !== undefined && ld.tuneSlotsLeft !== undefined) {
+                html += '<div class="timer-row"><span>Tune</span><span>' + ld.tuneCount + ' lần</span></div>';
+            }
+            html += '<div class="timer-row"><span>Đan Huân hôm nay</span><span style="color:' + (danHuanUsed >= 27 ? '#4ade80' : '#fbbf24') + ';">' + danHuanUsed + '/27</span></div>';
+        }
+
+        if (!isDong && ld.finishAt) {
+            var remaining2 = Math.max(0, tasks2.luyenDan.finishAtTs * 1000 - Date.now());
+            var doneColor, doneText;
+            if (ld.status === 'ready' || remaining2 <= 0) {
+                doneColor = '#4ade80';
+                doneText = 'Hoàn thành! Bấm Thu Đan';
+            } else {
+                var mins2 = Math.floor(remaining2 / 60000);
+                var secs2 = Math.floor((remaining2 % 60000) / 1000);
+                doneColor = '#fff';
+                doneText = mins2 + 'p ' + secs2 + 's';
+            }
+            html += '<div class="timer-row"><span>Còn lại</span><span style="color:' + doneColor + ';">' + doneText + '</span></div>';
+        }
+
+        html += '</div>';
+    }
+
+    if (runningTask) {
+        html += `<div class="timer-row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;"><span>Đang chạy</span><span style="color:#fbbf24;">${runningTask}</span></div>`;
+
+        if (!window._runningTaskTimer) {
+            window._runningTaskTimer = setTimeout(function () {
+                runningTask = null;
+                window._runningTaskTimer = null;
             }, 30000);
         }
     }
+
+    timerDisplay.innerHTML = html || '<div class="timer-row">Không có task nào đang chờ</div>';
+}
 
     //Chạy task với xử lý lỗi chung
     var runningTask = null;
@@ -2352,19 +3791,10 @@
         createAutoMenuButton();
         updateButtonStates();
         updateTimerDisplay();
+        initLdTimerOnLoad();
         if (!autoMenuInitialized) {
             autoMenuInitialized = true;
-            var lastTasksSnapshot = null;
-
-            setInterval(function () {
-                var tasks = getDailyTasks();
-                var snapshot = JSON.stringify(tasks);
-
-                if (snapshot !== lastTasksSnapshot) {
-                    lastTasksSnapshot = snapshot;
-                    updateButtonStates();
-                }
-            }, 1000);
+            setInterval(updateButtonStates, 5000);
             setInterval(updateTimerDisplay, 1000);
             var setting = getUserSetting();
             setTimeout(function () {
@@ -2372,7 +3802,7 @@
                 if (panel && panel.style.display !== 'block') {
                     toggleControlPanel();
                 }
-            }, 2000); // delay thêm 2s để đảm bảo mọi thứ đã sẵn sàng trước khi chạy auto
+            }, 1000); // delay thêm 2s để đảm bảo mọi thứ đã sẵn sàng trước khi chạy auto
             if (setting.autoRun !== false) {
                 startAutoExecute();
             }
@@ -2382,7 +3812,6 @@
             if (setting.chucphuc?.auto) {
                 runTask(danh_chuc_phuc_api);
             }
-
         }
     }
 
