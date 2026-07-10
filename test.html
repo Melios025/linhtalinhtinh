@@ -1,337 +1,382 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mê Cung — UI Test</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: #0f1117;
-    color: #e2e8f0;
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    font-size: 13px;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-  }
-
-  h2 {
-    color: #94a3b8;
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-
-  /* ── Panel giống trong script ── */
-  .panel {
-    background: #1e2330;
-    border: 1px solid #2d3448;
-    border-radius: 10px;
-    padding: 10px 12px;
-    min-width: 220px;
-    max-width: 280px;
-  }
-
-  .timer-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 3px 0;
-    gap: 8px;
-  }
-
-  .timer-row span { flex-shrink: 0; }
-  .timer-row span:last-child { text-align: right; }
-
-  .hp-bar-wrap {
-    height: 4px;
-    background: #2d3448;
-    border-radius: 2px;
-    margin: 4px 0 2px;
-    overflow: hidden;
-  }
-
-  .hp-bar {
-    height: 100%;
-    border-radius: 2px;
-    transition: width 0.4s ease;
-  }
-
-  /* ── Controls ── */
-  .controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .controls label {
-    color: #94a3b8;
-    font-size: 12px;
-  }
-
-  select, input[type=range], input[type=number] {
-    background: #1e2330;
-    border: 1px solid #2d3448;
-    color: #e2e8f0;
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  input[type=range] { padding: 0; width: 120px; cursor: pointer; }
-
-  .btn {
-    background: #3b4a6b;
-    border: none;
-    border-radius: 6px;
-    color: #e2e8f0;
-    padding: 5px 12px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .btn:hover { background: #4c5f8a; }
-  .btn.active { background: #2563eb; }
-
-  /* ── Alerts ── */
-  #alert-box {
-    background: #1e2330;
-    border: 1px solid #2d3448;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 12px;
-    color: #94a3b8;
-    min-height: 32px;
-  }
-  #alert-box.success { border-color: #22c55e; color: #22c55e; }
-  #alert-box.error   { border-color: #ef4444; color: #ef4444; }
-
-  /* ── Scenarios ── */
-  .scenario-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-</style>
-</head>
-<body>
-
-<div>
-  <h2>Trạng thái hiển thị</h2>
-  <div class="panel" id="status-panel"><!-- render here --></div>
-</div>
-
-<div>
-  <h2>Alert</h2>
-  <div id="alert-box">—</div>
-</div>
-
-<div>
-  <h2>Controls</h2>
-  <div class="controls">
-    <label>Status:
-      <select id="ctrl-status">
-        <option value="waiting">waiting</option>
-        <option value="ready">ready</option>
-        <option value="battle" selected>battle</option>
-        <option value="reconnecting">reconnecting</option>
-      </select>
-    </label>
-
-    <label>Ải:
-      <input type="number" id="ctrl-stage" value="3" min="1" max="5" style="width:52px;">
-    </label>
-
-    <label>Boss HP:
-      <input type="range" id="ctrl-hp" min="0" max="100" value="62">
-      <span id="ctrl-hp-val">62%</span>
-    </label>
-
-    <label>Element:
-      <select id="ctrl-element">
-        <option value="fire">Hỏa</option>
-        <option value="water">Thủy</option>
-        <option value="wood">Mộc</option>
-        <option value="metal">Kim</option>
-        <option value="earth">Thổ</option>
-        <option value="">—</option>
-      </select>
-    </label>
-
-    <label>Kết quả:
-      <select id="ctrl-result">
-        <option value="">—</option>
-        <option value="win">Thắng</option>
-        <option value="lose">Thua</option>
-      </select>
-    </label>
-  </div>
-</div>
-
-<div>
-  <h2>Scenarios nhanh</h2>
-  <div class="scenario-row">
-    <button class="btn" onclick="applyScenario('waiting')">Chờ</button>
-    <button class="btn" onclick="applyScenario('ready')">Sẵn sàng</button>
-    <button class="btn" onclick="applyScenario('battle_high')">Battle HP cao</button>
-    <button class="btn" onclick="applyScenario('battle_low')">Battle HP thấp</button>
-    <button class="btn" onclick="applyScenario('win')">Thắng</button>
-    <button class="btn" onclick="applyScenario('lose')">Thua</button>
-    <button class="btn" onclick="applyScenario('reconnecting')">Reconnecting</button>
-  </div>
-</div>
-
-<div>
-  <h2>Alert test</h2>
-  <div class="scenario-row">
-    <button class="btn" onclick="showAlert('Đang kết nối socket...', 'success')">Kết nối</button>
-    <button class="btn" onclick="showAlert('Đã vào phòng MC001!', 'success')">Vào phòng</button>
-    <button class="btn" onclick="showAlert('Đã sẵn sàng! Chờ host bắt đầu...', 'success')">Ready</button>
-    <button class="btn" onclick="showAlert('Ải 3 — Hắc Long bắt đầu!', 'success')">Battle start</button>
-    <button class="btn" onclick="showAlert('Ải 3 thắng!', 'success')">Thắng</button>
-    <button class="btn" onclick="showAlert('Thua! Chờ lượt mới...', 'error')">Thua</button>
-    <button class="btn" onclick="showAlert('Nhận rương ải 5 sau 7 giây...', 'success')">Rương</button>
-    <button class="btn" onclick="showAlert('Đã hoàn thành Mê Cung!', 'success')">Hoàn thành</button>
-  </div>
-</div>
-
-<script>
-  // ── Dữ liệu màu giống script gốc ──
-  var elColor = {
-    fire:  '#ef4444',
-    water: '#38bdf8',
-    wood:  '#4ade80',
-    metal: '#e2e8f0',
-    earth: '#fbbf24',
-  };
-  var elName = {
-    fire:  'Hỏa',
-    water: 'Thủy',
-    wood:  'Mộc',
-    metal: 'Kim',
-    earth: 'Thổ',
-  };
-
-  function hpToColor(pct) {
-    if (pct > 50) return '#22c55e';
-    if (pct > 25) return '#fbbf24';
-    return '#ef4444';
-  }
-
-  function statusToLabel(status) {
-    return {
-      waiting:      'Chờ',
-      ready:        'Sẵn sàng',
-      battle:       'Đang đánh',
-      reconnecting: 'Mất kết nối...',
-    }[status] || status;
-  }
-
-  // ── Render panel (logic giống script gốc) ──
-  function renderPanel(mc) {
-    var statusLabel = statusToLabel(mc.status);
-    var resLabel = mc.lastResult === 'win' ? 'Thắng' : mc.lastResult === 'lose' ? 'Thua' : '';
-    var resColor  = mc.lastResult === 'win' ? '#22c55e' : '#ef4444';
-    var hpColor   = hpToColor(mc.bossHpPct);
-
-    var html = '';
-
-    // Dòng 1: Tên + trạng thái
-    html += '<div class="timer-row">'
-          + '<span>Mê Cung</span>'
-          + '<span style="color:#fbbf24;">' + statusLabel + ' — Ải ' + (mc.stage || 0) + '</span>'
-          + '</div>';
-
-    // Dòng 2: Boss HP + Hệ (khi battle)
-    if (mc.status === 'battle' && mc.bossHpPct !== null && mc.bossHpPct !== undefined) {
-      html += '<div class="hp-bar-wrap"><div class="hp-bar" style="width:' + mc.bossHpPct + '%;background:' + hpColor + ';"></div></div>';
-      html += '<div class="timer-row">'
-            + '<span style="color:' + (elColor[mc.bossElement] || '#fff') + ';">' + (elName[mc.bossElement] || mc.bossElement || '?') + '</span>'
-            + '<span style="color:' + hpColor + ';">' + (mc.bossHpPct || '?') + '%</span>'
-            + (resLabel ? '<span style="color:' + resColor + ';">' + resLabel + '</span>' : '')
-            + '</div>';
-    } else if (resLabel) {
-      html += '<div class="timer-row">'
-            + '<span style="color:#aaa;">Vòng trước</span>'
-            + '<span style="color:' + resColor + ';">' + resLabel + '</span>'
-            + '</div>';
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mê Cung — UI Test</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
-    document.getElementById('status-panel').innerHTML = html;
-  }
+    body {
+      background: #0f1117;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
 
-  // ── Đọc state từ controls ──
-  function getState() {
-    return {
-      status:      document.getElementById('ctrl-status').value,
-      stage:       parseInt(document.getElementById('ctrl-stage').value) || 1,
-      bossHpPct:   parseInt(document.getElementById('ctrl-hp').value),
-      bossElement: document.getElementById('ctrl-element').value,
-      lastResult:  document.getElementById('ctrl-result').value,
+    h2 {
+      color: #94a3b8;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    /* ── Panel giống trong script ── */
+    .panel {
+      background: #1e2330;
+      border: 1px solid #2d3448;
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-width: 220px;
+      max-width: 280px;
+    }
+
+    .timer-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 3px 0;
+      gap: 8px;
+    }
+
+    .timer-row span {
+      flex-shrink: 0;
+    }
+
+    .timer-row span:last-child {
+      text-align: right;
+    }
+
+    .hp-bar-wrap {
+      height: 4px;
+      background: #2d3448;
+      border-radius: 2px;
+      margin: 4px 0 2px;
+      overflow: hidden;
+    }
+
+    .hp-bar {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .controls label {
+      color: #94a3b8;
+      font-size: 12px;
+    }
+
+    select,
+    input[type=range],
+    input[type=number] {
+      background: #1e2330;
+      border: 1px solid #2d3448;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    input[type=range] {
+      padding: 0;
+      width: 120px;
+      cursor: pointer;
+    }
+
+    .btn {
+      background: #3b4a6b;
+      border: none;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 5px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn:hover {
+      background: #4c5f8a;
+    }
+
+    .btn.active {
+      background: #2563eb;
+    }
+
+    /* ── Alerts ── */
+    #alert-box {
+      background: #1e2330;
+      border: 1px solid #2d3448;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #94a3b8;
+      min-height: 32px;
+    }
+
+    #alert-box.success {
+      border-color: #22c55e;
+      color: #22c55e;
+    }
+
+    #alert-box.error {
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    /* ── Scenarios ── */
+    .scenario-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div>
+    <h2>Trạng thái hiển thị</h2>
+    <div class="panel" id="status-panel"><!-- render here --></div>
+  </div>
+
+  <div>
+    <h2>Alert</h2>
+    <div id="alert-box">—</div>
+  </div>
+
+  <div>
+    <h2>Controls</h2>
+    <div class="controls">
+      <label>Status:
+        <select id="ctrl-status">
+          <option value="waiting">waiting</option>
+          <option value="ready">ready</option>
+          <option value="battle" selected>battle</option>
+          <option value="reconnecting">reconnecting</option>
+        </select>
+      </label>
+
+      <label>Ải:
+        <input type="number" id="ctrl-stage" value="3" min="1" max="5" style="width:52px;">
+      </label>
+
+      <label>Boss HP:
+        <input type="range" id="ctrl-hp" min="0" max="100" value="62">
+        <span id="ctrl-hp-val">62%</span>
+      </label>
+
+      <label>Element:
+        <select id="ctrl-element">
+          <option value="fire">Hỏa</option>
+          <option value="water">Thủy</option>
+          <option value="wood">Mộc</option>
+          <option value="metal">Kim</option>
+          <option value="earth">Thổ</option>
+          <option value="">—</option>
+        </select>
+      </label>
+
+      <label>Kết quả:
+        <select id="ctrl-result">
+          <option value="">—</option>
+          <option value="win">Thắng</option>
+          <option value="lose">Thua</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div>
+    <h2>Scenarios nhanh</h2>
+    <div class="scenario-row">
+      <button class="btn" onclick="applyScenario('waiting')">Chờ</button>
+      <button class="btn" onclick="applyScenario('ready')">Sẵn sàng</button>
+      <button class="btn" onclick="applyScenario('battle_high')">Battle HP cao</button>
+      <button class="btn" onclick="applyScenario('battle_low')">Battle HP thấp</button>
+      <button class="btn" onclick="applyScenario('win')">Thắng</button>
+      <button class="btn" onclick="applyScenario('lose')">Thua</button>
+      <button class="btn" onclick="applyScenario('reconnecting')">Reconnecting</button>
+    </div>
+  </div>
+
+  <div>
+    <h2>Alert test</h2>
+    <div class="scenario-row">
+      <button class="btn" onclick="showAlert('Đang kết nối socket...', 'success')">Kết nối</button>
+      <button class="btn" onclick="showAlert('Đã vào phòng MC001!', 'success')">Vào phòng</button>
+      <button class="btn" onclick="showAlert('Đã sẵn sàng! Chờ host bắt đầu...', 'success')">Ready</button>
+      <button class="btn" onclick="showAlert('Ải 3 — Hắc Long bắt đầu!', 'success')">Battle start</button>
+      <button class="btn" onclick="showAlert('Ải 3 thắng!', 'success')">Thắng</button>
+      <button class="btn" onclick="showAlert('Thua! Chờ lượt mới...', 'error')">Thua</button>
+      <button class="btn" onclick="showAlert('Nhận rương ải 5 sau 7 giây...', 'success')">Rương</button>
+      <button class="btn" onclick="showAlert('Đã hoàn thành Mê Cung!', 'success')">Hoàn thành</button>
+    </div>
+  </div>
+
+  <script>
+    // ── Dữ liệu màu giống script gốc ──
+    var elColor = {
+      fire: '#ef4444',
+      water: '#38bdf8',
+      wood: '#4ade80',
+      metal: '#e2e8f0',
+      earth: '#fbbf24',
     };
-  }
-
-  function refresh() { renderPanel(getState()); }
-
-  // ── Event listeners ──
-  ['ctrl-status','ctrl-stage','ctrl-element','ctrl-result'].forEach(function(id) {
-    document.getElementById(id).addEventListener('change', refresh);
-  });
-  document.getElementById('ctrl-hp').addEventListener('input', function() {
-    document.getElementById('ctrl-hp-val').textContent = this.value + '%';
-    refresh();
-  });
-
-  // ── Scenarios ──
-  function applyScenario(name) {
-    var s = document.getElementById('ctrl-status');
-    var h = document.getElementById('ctrl-hp');
-    var e = document.getElementById('ctrl-element');
-    var r = document.getElementById('ctrl-result');
-    var g = document.getElementById('ctrl-stage');
-
-    var map = {
-      waiting:      { status:'waiting',      hp:80,  el:'fire',  res:'',     stage:1 },
-      ready:        { status:'ready',        hp:80,  el:'water', res:'',     stage:2 },
-      battle_high:  { status:'battle',       hp:62,  el:'fire',  res:'win',  stage:3 },
-      battle_low:   { status:'battle',       hp:12,  el:'earth', res:'lose', stage:4 },
-      win:          { status:'waiting',      hp:0,   el:'wood',  res:'win',  stage:3 },
-      lose:         { status:'waiting',      hp:0,   el:'metal', res:'lose', stage:2 },
-      reconnecting: { status:'reconnecting', hp:40,  el:'water', res:'',     stage:3 },
+    var elName = {
+      fire: 'Hỏa',
+      water: 'Thủy',
+      wood: 'Mộc',
+      metal: 'Kim',
+      earth: 'Thổ',
     };
 
-    var sc = map[name];
-    if (!sc) return;
-    s.value = sc.status;
-    h.value = sc.hp;
-    document.getElementById('ctrl-hp-val').textContent = sc.hp + '%';
-    e.value = sc.el;
-    r.value = sc.res;
-    g.value = sc.stage;
-    refresh();
-  }
+    function hpToColor(pct) {
+      if (pct > 50) return '#22c55e';
+      if (pct > 25) return '#fbbf24';
+      return '#ef4444';
+    }
 
-  // ── Alert ──
-  var _alertTimer = null;
-  function showAlert(msg, type) {
-    var box = document.getElementById('alert-box');
-    box.textContent = msg;
-    box.className = type || '';
-    if (_alertTimer) clearTimeout(_alertTimer);
-    _alertTimer = setTimeout(function() {
-      box.textContent = '—';
-      box.className = '';
-    }, 3000);
-  }
+    function statusToLabel(status) {
+      return {
+        waiting: 'Chờ',
+        ready: 'Sẵn sàng',
+        battle: 'Đang đánh',
+        reconnecting: 'Mất kết nối...',
+      }[status] || status;
+    }
 
-  // ── Init ──
-  applyScenario('battle_high');
-</script>
+    // ── Render panel (logic giống script gốc) ──
+    function renderPanel(mc) {
+      var statusLabel = statusToLabel(mc.status);
+      var resLabel = mc.lastResult === 'win' ? 'Thắng' : mc.lastResult === 'lose' ? 'Thua' : '';
+      var resColor = mc.lastResult === 'win' ? '#22c55e' : '#ef4444';
+      var hpColor = hpToColor(mc.bossHpPct);
+
+      var html = '';
+
+      // Dòng 1: Tên + trạng thái
+      html += '<div class="timer-row">'
+        + '<span>Mê Cung</span>'
+        + '<span style="color:#fbbf24;">' + statusLabel + ' — Ải ' + (mc.stage || 0) + '</span>'
+        + '</div>';
+
+      // Dòng 2: Boss HP + Hệ (khi battle)
+      if (mc.status === 'battle' && mc.bossHpPct !== null && mc.bossHpPct !== undefined) {
+        html += '<div class="hp-bar-wrap"><div class="hp-bar" style="width:' + mc.bossHpPct + '%;background:' + hpColor + ';"></div></div>';
+        html += '<div class="timer-row">'
+          + '<span style="color:' + (elColor[mc.bossElement] || '#fff') + ';">' + (elName[mc.bossElement] || mc.bossElement || '?') + '</span>'
+          + '<span style="color:' + hpColor + ';">' + (mc.bossHpPct || '?') + '%</span>'
+          + (resLabel ? '<span style="color:' + resColor + ';">' + resLabel + '</span>' : '')
+          + '</div>';
+      } else if (resLabel) {
+        html += '<div class="timer-row">'
+          + '<span style="color:#aaa;">Vòng trước</span>'
+          + '<span style="color:' + resColor + ';">' + resLabel + '</span>'
+          + '</div>';
+      }
+
+      document.getElementById('status-panel').innerHTML = html;
+    }
+
+    // ── Đọc state từ controls ──
+    function getState() {
+      return {
+        status: document.getElementById('ctrl-status').value,
+        stage: parseInt(document.getElementById('ctrl-stage').value) || 1,
+        bossHpPct: parseInt(document.getElementById('ctrl-hp').value),
+        bossElement: document.getElementById('ctrl-element').value,
+        lastResult: document.getElementById('ctrl-result').value,
+      };
+    }
+
+    function refresh() { renderPanel(getState()); }
+
+    // ── Event listeners ──
+    ['ctrl-status', 'ctrl-stage', 'ctrl-element', 'ctrl-result'].forEach(function (id) {
+      document.getElementById(id).addEventListener('change', refresh);
+    });
+    document.getElementById('ctrl-hp').addEventListener('input', function () {
+      document.getElementById('ctrl-hp-val').textContent = this.value + '%';
+      refresh();
+    });
+
+    // ── Scenarios ──
+    function applyScenario(name) {
+      var s = document.getElementById('ctrl-status');
+      var h = document.getElementById('ctrl-hp');
+      var e = document.getElementById('ctrl-element');
+      var r = document.getElementById('ctrl-result');
+      var g = document.getElementById('ctrl-stage');
+
+      var map = {
+        waiting: { status: 'waiting', hp: 80, el: 'fire', res: '', stage: 1 },
+        ready: { status: 'ready', hp: 80, el: 'water', res: '', stage: 2 },
+        battle_high: { status: 'battle', hp: 62, el: 'fire', res: 'win', stage: 3 },
+        battle_low: { status: 'battle', hp: 12, el: 'earth', res: 'lose', stage: 4 },
+        win: { status: 'waiting', hp: 0, el: 'wood', res: 'win', stage: 3 },
+        lose: { status: 'waiting', hp: 0, el: 'metal', res: 'lose', stage: 2 },
+        reconnecting: { status: 'reconnecting', hp: 40, el: 'water', res: '', stage: 3 },
+      };
+
+      var sc = map[name];
+      if (!sc) return;
+      s.value = sc.status;
+      h.value = sc.hp;
+      document.getElementById('ctrl-hp-val').textContent = sc.hp + '%';
+      e.value = sc.el;
+      r.value = sc.res;
+      g.value = sc.stage;
+      refresh();
+    }
+
+    // ── Alert ──
+    var _alertTimer = null;
+    function showAlert(msg, type) {
+      var box = document.getElementById('alert-box');
+      box.textContent = msg;
+      box.className = type || '';
+      if (_alertTimer) clearTimeout(_alertTimer);
+      _alertTimer = setTimeout(function () {
+        box.textContent = '—';
+        box.className = '';
+      }, 3000);
+    }
+
+    // ── Init ──
+    applyScenario('battle_high');
+  </script>
+
+  <!-- Phân giải đan -->
+  <div class="ld-section-title"><i class="fa-solid fa-scissors"></i> Phân giải</div>
+  <div class="ld-row">
+    <select id="ld-pill-select" class="panel-select">
+      <option value="">-- Chọn đan phân giải --</option>
+    </select>
+    <button id="btn-ld-decompose" class="panel-btn btn-auto-toggle" title="Phân giải đan">
+      <i class="fa-solid fa-scissors"></i>
+    </button>
+  </div>
+  </div>
+  </div>
 </body>
+
 </html>
